@@ -11,6 +11,7 @@ fn main() {
         .whitelist_function("geom_.*")
         .whitelist_function("gctl_.*")
         .whitelist_function("g_.*")
+        .whitelist_type("devstat_trans_flags")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");

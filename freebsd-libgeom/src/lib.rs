@@ -13,6 +13,96 @@ use std::{
     ptr::NonNull
 };
 
+/// Used by [`Statistics::compute`]
+macro_rules! delta {
+    ($current: ident, $previous: ident, $field:ident, $index:expr) => {
+        {
+            let idx = $index as usize;
+            let old = if let Some(prev) = $previous {
+                unsafe {prev.devstat.as_ref() }.$field[idx]
+            } else {
+                0
+            };
+            let new = unsafe {$current.devstat.as_ref() }.$field[idx];
+            new - old
+        }
+    }
+}
+
+macro_rules! delta_t {
+    ($cur: ident, $prev: ident, $field:ident, $index:expr) => {
+        {
+            // BINTIME_SCALE is 1 / 2**64
+            const BINTIME_SCALE: f64 = 5.42101086242752217003726400434970855712890625e-20;
+            let idx = $index as usize;
+            let old: &bintime = if let Some(prev) = $prev {
+                &unsafe {prev.devstat.as_ref() }.$field[idx]
+            } else {
+                &bintime{sec: 0, frac: 0}
+            };
+            let new: &bintime = &unsafe {$cur.devstat.as_ref() }.$field[idx];
+            (new.sec - old.sec) as f64
+                + (new.frac - old.frac) as f64 * BINTIME_SCALE
+        }
+    }
+}
+
+macro_rules! fields {
+    ($self: ident, $meth: ident, $field: ident) => {
+        pub fn $meth($self) -> u64 {
+            $self.$field
+        }
+    }
+}
+
+macro_rules! fields_per_sec {
+    ($self: ident, $meth: ident, $field: ident) => {
+        pub fn $meth($self) -> f64 {
+            if $self.etime > 0.0 {
+                $self.$field as f64 / $self.etime
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
+macro_rules! kb_per_xfer {
+    ($self: ident, $meth: ident, $xfers: ident, $bytes: ident) => {
+        pub fn $meth($self) -> f64 {
+            if $self.$xfers > 0 {
+                $self.$bytes as f64 / (1<<10) as f64 / $self.$xfers as f64
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
+macro_rules! mb_per_sec {
+    ($self: ident, $meth: ident, $field: ident) => {
+        pub fn $meth($self) -> f64 {
+            if $self.etime > 0.0 {
+                $self.$field as f64 / (1<<20) as f64 / $self.etime
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
+macro_rules! ms_per_xfer {
+    ($self: ident, $meth: ident, $xfers: ident, $duration: ident) => {
+        pub fn $meth($self) -> f64 {
+            if $self.$xfers > 0 {
+                $self.$duration * 1000.0 / $self.$xfers as f64
+            } else {
+                0.0
+            }
+        }
+    }
+}
+
 lazy_static! {
     static ref GEOM_STATS: Result<()> = {
         let r = unsafe { geom_stats_open() };
@@ -126,6 +216,173 @@ impl<'a> Iterator for &'a mut Snapshot {
         NonNull::new(raw)
             .map(|devstat| Devstat{devstat, phantom: PhantomData})
     }
+}
+
+/// Computes statistics between two [`Snapshot`]s for the same device.
+///
+/// This is equivalent to libgeom's
+/// [`devstat_compute_statistics`](https://www.freebsd.org/cgi/man.cgi?query=devstat&sektion=3)
+/// function.
+// Note that Rust cannot bind to devstat_compute_statistics because its API
+// includes "long double", which has no Rust equivalent.  So we reimplement the
+// logic here.
+pub struct Statistics<'a>{
+    current: Devstat<'a>,
+    previous: Option<Devstat<'a>>,
+    etime: f64,
+    total_bytes: u64,
+    total_bytes_free: u64,
+    total_bytes_read: u64,
+    total_bytes_write: u64,
+    total_blocks: u64,
+    total_blocks_free: u64,
+    total_blocks_read: u64,
+    total_blocks_write: u64,
+    total_duration: f64,
+    total_duration_free: f64,
+    total_duration_other: f64,
+    total_duration_read: f64,
+    total_duration_write: f64,
+    total_transfers: u64,
+    total_transfers_free: u64,
+    total_transfers_other: u64,
+    total_transfers_read: u64,
+    total_transfers_write: u64,
+}
+
+impl<'a> Statistics<'a> {
+    /// Compute statistics between two [`Devstat`] objects, which must
+    /// correspond to the same device, and should come from two separate
+    /// snapshots
+    ///
+    /// If `prev` is `None`, then statistics since boot will be returned.
+    /// `etime` should be the elapsed time in seconds between the two snapshots.
+    pub fn compute(
+        current: Devstat<'a>,
+        previous: Option<Devstat<'a>>,
+        etime: f64) -> Self
+    {
+        let cur = unsafe { current.devstat.as_ref() };
+
+        let total_transfers_read = delta!(current, previous, operations,
+                                          devstat_trans_flags_DEVSTAT_READ);
+        let total_transfers_write = delta!(current, previous, operations,
+                                           devstat_trans_flags_DEVSTAT_WRITE);
+        let total_transfers_other = delta!(current, previous, operations,
+                                           devstat_trans_flags_DEVSTAT_NO_DATA);
+        let total_transfers_free = delta!(current, previous, operations,
+                                          devstat_trans_flags_DEVSTAT_FREE);
+        let total_transfers = total_transfers_read + total_transfers_write +
+            total_transfers_other + total_transfers_free;
+
+        let total_bytes_free = delta!(current, previous, bytes,
+                                          devstat_trans_flags_DEVSTAT_FREE);
+        let total_bytes_read = delta!(current, previous, bytes,
+                                          devstat_trans_flags_DEVSTAT_READ);
+        let total_bytes_write = delta!(current, previous, bytes,
+                                          devstat_trans_flags_DEVSTAT_WRITE);
+        let total_bytes = total_bytes_read + total_bytes_write +
+            total_bytes_free;
+
+        let block_denominator = if cur.block_size > 0 {
+            cur.block_size as u64
+        } else {
+            512u64
+        };
+        let total_blocks = total_bytes / block_denominator;
+        let total_blocks_free = total_bytes_free / block_denominator;
+        let total_blocks_read = total_bytes_read / block_denominator;
+        let total_blocks_write = total_bytes_write / block_denominator;
+
+        let total_duration_free = delta_t!(current, previous, duration,
+                                         devstat_trans_flags_DEVSTAT_FREE);
+        let total_duration_read = delta_t!(current, previous, duration,
+                                         devstat_trans_flags_DEVSTAT_READ);
+        let total_duration_write = delta_t!(current, previous, duration,
+                                         devstat_trans_flags_DEVSTAT_WRITE);
+        let total_duration_other = delta_t!(current, previous, duration,
+                                         devstat_trans_flags_DEVSTAT_NO_DATA);
+        let total_duration = total_duration_read + total_duration_write +
+            total_duration_other + total_duration_free;
+
+        Self{
+            current,
+            previous,
+            etime,
+            total_bytes,
+            total_bytes_free,
+            total_bytes_read,
+            total_bytes_write,
+            total_blocks,
+            total_blocks_free,
+            total_blocks_read,
+            total_blocks_write,
+            total_duration,
+            total_duration_free,
+            total_duration_other,
+            total_duration_read,
+            total_duration_write,
+            total_transfers,
+            total_transfers_free,
+            total_transfers_other,
+            total_transfers_read,
+            total_transfers_write,
+        }
+    }
+
+    /// The percentage of time the device had one or more transactions
+    /// outstanding between the acquisition of the two snapshots.
+    //pub fn busy_pct(&self) -> f64 {
+        //delta_t!(self.current, self.previous, devstat_trans_flags_busy_time
+    //}
+
+    /// Returns the number of incomplete transactions at the time `cur` was
+    /// acquired.
+    pub fn queue_length(&self) -> u32 {
+        let cur = unsafe {self.current.devstat.as_ref() };
+        return cur.start_count - cur.end_count
+    }
+
+    fields!{self, total_bytes, total_bytes}
+    fields!{self, total_bytes_free, total_bytes_free}
+    fields!{self, total_bytes_read, total_bytes_read}
+    fields!{self, total_bytes_write, total_bytes_write}
+    fields!{self, total_blocks, total_blocks}
+    fields!{self, total_blocks_free, total_blocks_free}
+    fields!{self, total_blocks_read, total_blocks_read}
+    fields!{self, total_blocks_write, total_blocks_write}
+    fields!{self, total_transfers, total_transfers}
+    fields!{self, total_transfers_free, total_transfers_free}
+    fields!{self, total_transfers_read, total_transfers_read}
+    fields!{self, total_transfers_other, total_transfers_other}
+    fields!{self, total_transfers_write, total_transfers_write}
+    fields_per_sec!{self, blocks_per_second, total_blocks}
+    fields_per_sec!{self, blocks_per_second_free, total_blocks_free}
+    fields_per_sec!{self, blocks_per_second_read, total_blocks_read}
+    fields_per_sec!{self, blocks_per_second_write, total_blocks_write}
+    kb_per_xfer!{self, kb_per_transfer, total_transfers, total_bytes}
+    kb_per_xfer!{self, kb_per_transfer_free, total_transfers_free, total_bytes}
+    kb_per_xfer!{self, kb_per_transfer_read, total_transfers_read, total_bytes}
+    kb_per_xfer!{self, kb_per_transfer_write, total_transfers_write,
+        total_bytes}
+    ms_per_xfer!{self, ms_per_transaction, total_transfers, total_duration}
+    ms_per_xfer!{self, ms_per_transaction_free, total_transfers_free,
+                total_duration_free}
+    ms_per_xfer!{self, ms_per_transaction_read, total_transfers_read,
+                total_duration_read}
+    ms_per_xfer!{self, ms_per_transaction_other, total_transfers_other,
+                total_duration_other}
+    ms_per_xfer!{self, ms_per_transaction_write, total_transfers_write,
+                total_duration_write}
+    mb_per_sec!{self, mb_per_second, total_bytes}
+    mb_per_sec!{self, mb_per_second_free, total_bytes_free}
+    mb_per_sec!{self, mb_per_second_read, total_bytes_read}
+    mb_per_sec!{self, mb_per_second_write, total_bytes_write}
+    fields_per_sec!{self, transfers_per_second, total_transfers}
+    fields_per_sec!{self, transfers_per_second_free, total_transfers_free}
+    fields_per_sec!{self, transfers_per_second_other, total_transfers_other}
+    fields_per_sec!{self, transfers_per_second_read, total_transfers_read}
+    fields_per_sec!{self, transfers_per_second_write, total_transfers_write}
 }
 
 /// Return type of [`Snapshot::timestamp`].  It's the familiar C `timespec`.
