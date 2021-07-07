@@ -7,6 +7,10 @@ fn main() {
     println!("cargo:rustc-link-lib=geom");
     let bindings = bindgen::Builder::default()
         .header("/usr/include/libgeom.h")
+        .header("/usr/include/sys/devicestat.h")
+        .whitelist_function("geom_.*")
+        .whitelist_function("gctl_.*")
+        .whitelist_function("g_.*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");

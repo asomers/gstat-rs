@@ -1,2 +1,6 @@
 [workspace]
-members = ["greasestat"]
+members = [
+	"greasestat",
+	"freebsd-libgeom",
+	"freebsd-libgeom-sys",
+]
