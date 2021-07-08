@@ -1,15 +1,17 @@
-//! Similar to "iostat -x".  See iostat(8).
+//! Similar to "iostat -x -w 1 -c 2".  See iostat(8).
 
 use freebsd_libgeom::*;
 use nix::time::{ClockId, clock_gettime};
 use std::{
     error::Error,
+    thread::sleep,
+    time::Duration
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut tree = Tree::new()?;
 
-    let mut initial = Snapshot::new()?;
+    let mut previous: Option<Snapshot> = None;
     println!("{:8}{:>8}{:>8}{:>9}{:>9}{:>6}{:>6}{:>6}{:>6}{:>5}{:>4}",
              "device",
              "r/s",
@@ -24,26 +26,46 @@ fn main() -> Result<(), Box<dyn Error>> {
              "%b"
              );
     let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
-    let boottime_secs = boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9;
-    for devstat in &mut initial {
-        if let Some(gident) = tree.lookup(devstat.id()) {
-            if let Some(1) = gident.rank() {
-                let stats = Statistics::compute(devstat, None, boottime_secs);
-                println!("{:8} {:>7.0} {:>7.0} {:>8.1} {:>8.1} {:>5.0} {:>5.0} {:>5.0} {:>5.0} {:>4} {:>3.0}",
-                    gident.name().to_string_lossy(),
-                    stats.transfers_per_second_read(),
-                    stats.transfers_per_second_write(),
-                    stats.mb_per_second_read() * 1024.0,
-                    stats.mb_per_second_write() * 1024.0,
-                    stats.ms_per_transaction_read(),
-                    stats.ms_per_transaction_write(),
-                    stats.ms_per_transaction_other() + stats.ms_per_transaction_free(),
-                    stats.ms_per_transaction(),
-                    stats.queue_length(),
-                    stats.busy_pct()
-               )
+    for _ in 0..2 {
+        let mut current = Snapshot::new()?;
+        let etime = if let Some(prev) = previous.as_mut() {
+            f64::from(current.timestamp() - prev.timestamp())
+        } else {
+            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
+        };
+        let mut prev_iter = if let Some(prev) = previous.as_mut() {
+            Some(prev.iter())
+        } else {
+            None
+        };
+        for curstat in current.iter() {
+            let prevstat = if let Some(pi) = prev_iter.as_mut() {
+                Some(pi.next().unwrap())
+            } else {
+                None
+            };
+            if let Some(gident) = tree.lookup(curstat.id()) {
+                if let Some(1) = gident.rank() {
+                    let stats = Statistics::compute(curstat, prevstat, etime);
+                    println!("{:8} {:>7.0} {:>7.0} {:>8.1} {:>8.1} {:>5.0} {:>5.0} {:>5.0} {:>5.0} {:>4} {:>3.0}",
+                        gident.name().to_string_lossy(),
+                        stats.transfers_per_second_read(),
+                        stats.transfers_per_second_write(),
+                        stats.mb_per_second_read() * 1024.0,
+                        stats.mb_per_second_write() * 1024.0,
+                        stats.ms_per_transaction_read(),
+                        stats.ms_per_transaction_write(),
+                        stats.ms_per_transaction_other() + stats.ms_per_transaction_free(),
+                        stats.ms_per_transaction(),
+                        stats.queue_length(),
+                        stats.busy_pct()
+                   )
+                }
             }
         }
+        drop(prev_iter);
+        previous = Some(current);
+        sleep(Duration::from_secs(1));
     }
 
     Ok(())

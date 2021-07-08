@@ -9,6 +9,7 @@ use std::{
     io::{Error, Result},
     marker::PhantomData,
     mem::{self, MaybeUninit},
+    ops::Sub,
     os::raw::c_void,
     pin::Pin,
     ptr::NonNull
@@ -178,13 +179,16 @@ pub struct Id<'a> {
 
 /// A geom statistics snapshot.
 ///
-/// This implements `Iterator`, with an extra `reset` method that can reset the
-/// internal pointer back to the beginning.
 // FreeBSD BUG: geom_stats_snapshot_get should return an opaque pointer instead
 // of a void*, for better type safety.
 pub struct Snapshot(NonNull<c_void>);
 
 impl Snapshot {
+    /// Iterate through all devices described by the snapshot
+    pub fn iter<'a>(&'a mut self) -> SnapshotIter<'a> {
+        SnapshotIter(self)
+    }
+
     /// Acquires a new snapshot of the raw data from the kernel.
     ///
     /// Is not guaranteed to be completely atomic and consistent.
@@ -197,7 +201,7 @@ impl Snapshot {
     }
 
     /// Reset the state of the internal iterator back to the beginning
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         unsafe {geom_stats_snapshot_reset(self.0.as_mut())}
     }
 
@@ -220,13 +224,22 @@ impl Drop for Snapshot {
     }
 }
 
-impl<'a> Iterator for &'a mut Snapshot {
+/// Return type of [`Snapshot::iter`].
+pub struct SnapshotIter<'a>(&'a mut Snapshot);
+
+impl<'a> Iterator for SnapshotIter<'a> {
     type Item = Devstat<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let raw = unsafe {geom_stats_snapshot_next(self.0.as_mut()) };
+        let raw = unsafe {geom_stats_snapshot_next(self.0.0.as_mut()) };
         NonNull::new(raw)
             .map(|devstat| Devstat{devstat, phantom: PhantomData})
+    }
+}
+
+impl<'a> Drop for SnapshotIter<'a> {
+    fn drop(&mut self) {
+        self.0.reset();
     }
 }
 
@@ -416,6 +429,20 @@ pub struct Timespec(freebsd_libgeom_sys::timespec);
 impl From<Timespec> for f64 {
     fn from(ts: Timespec) -> f64 {
         ts.0.tv_sec as f64 + ts.0.tv_nsec as f64 * 1e-9
+    }
+}
+
+impl Sub for Timespec {
+    type Output = Self;
+
+    fn sub(self, rhs: Timespec) -> Self::Output {
+        let mut tv_sec = self.0.tv_sec - rhs.0.tv_sec;
+        let mut tv_nsec = self.0.tv_nsec - rhs.0.tv_nsec;
+        if tv_nsec < 0 {
+            tv_sec -= 1;
+            tv_nsec += 1_000_000_000;
+        }
+        Self(freebsd_libgeom_sys::timespec {tv_sec, tv_nsec})
     }
 }
 
