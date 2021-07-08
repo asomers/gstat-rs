@@ -30,17 +30,18 @@ macro_rules! delta {
 }
 
 macro_rules! delta_t {
-    ($cur: ident, $prev: ident, $field:ident, $index:expr) => {
+    ($cur: expr, $prev: expr, $bintime:expr) => {
+    //($cur: ident, $prev: ident, $field:ident, $index:expr) => {
         {
             // BINTIME_SCALE is 1 / 2**64
             const BINTIME_SCALE: f64 = 5.42101086242752217003726400434970855712890625e-20;
-            let idx = $index as usize;
-            let old: &bintime = if let Some(prev) = $prev {
-                &unsafe {prev.devstat.as_ref() }.$field[idx]
+            //let idx = $index as usize;
+            let old: bintime = if let Some(prev) = $prev {
+                $bintime(unsafe {prev.devstat.as_ref() })
             } else {
-                &bintime{sec: 0, frac: 0}
+                bintime{sec: 0, frac: 0}
             };
-            let new: &bintime = &unsafe {$cur.devstat.as_ref() }.$field[idx];
+            let new: bintime = $bintime(unsafe {$cur.devstat.as_ref() });
             (new.sec - old.sec) as f64
                 + (new.frac - old.frac) as f64 * BINTIME_SCALE
         }
@@ -294,14 +295,22 @@ impl<'a> Statistics<'a> {
         let total_blocks_read = total_bytes_read / block_denominator;
         let total_blocks_write = total_bytes_write / block_denominator;
 
-        let total_duration_free = delta_t!(current, previous, duration,
-                                         devstat_trans_flags_DEVSTAT_FREE);
-        let total_duration_read = delta_t!(current, previous, duration,
-                                         devstat_trans_flags_DEVSTAT_READ);
-        let total_duration_write = delta_t!(current, previous, duration,
-                                         devstat_trans_flags_DEVSTAT_WRITE);
-        let total_duration_other = delta_t!(current, previous, duration,
-                                         devstat_trans_flags_DEVSTAT_NO_DATA);
+        let total_duration_free = delta_t!(current, previous,
+            |ds: &devstat|
+                ds.duration[devstat_trans_flags_DEVSTAT_FREE as usize]
+        );
+        let total_duration_read = delta_t!(current, previous,
+            |ds: &devstat|
+                ds.duration[devstat_trans_flags_DEVSTAT_READ as usize]
+        );
+        let total_duration_write = delta_t!(current, previous,
+            |ds: &devstat|
+                ds.duration[devstat_trans_flags_DEVSTAT_WRITE as usize]
+        );
+        let total_duration_other = delta_t!(current, previous,
+            |ds: &devstat|
+                ds.duration[devstat_trans_flags_DEVSTAT_NO_DATA as usize]
+        );
         let total_duration = total_duration_read + total_duration_write +
             total_duration_other + total_duration_free;
 
@@ -332,9 +341,11 @@ impl<'a> Statistics<'a> {
 
     /// The percentage of time the device had one or more transactions
     /// outstanding between the acquisition of the two snapshots.
-    //pub fn busy_pct(&self) -> f64 {
-        //delta_t!(self.current, self.previous, devstat_trans_flags_busy_time
-    //}
+    pub fn busy_pct(&self) -> f64 {
+        let delta = delta_t!(&self.current, &self.previous,
+            |ds: &devstat| ds.busy_time);
+        (delta / self.etime * 100.0).max(0.0)
+    }
 
     /// Returns the number of incomplete transactions at the time `cur` was
     /// acquired.
