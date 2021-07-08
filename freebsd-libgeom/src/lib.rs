@@ -8,8 +8,9 @@ use std::{
     ffi::CStr,
     io::{Error, Result},
     marker::PhantomData,
-    mem::MaybeUninit,
+    mem::{self, MaybeUninit},
     os::raw::c_void,
+    pin::Pin,
     ptr::NonNull
 };
 
@@ -412,13 +413,13 @@ pub struct Timespec(freebsd_libgeom_sys::timespec);
 /// Describes the entire Geom heirarchy.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct Tree(gmesh);
+pub struct Tree(Pin<Box<gmesh>>);
 
 impl Tree {
     // FreeBSD BUG: geom_lookupid takes a mutable pointer when it could be const
     pub fn lookup<'a>(&'a mut self, id: Id) -> Option<Gident<'a>> {
         let raw = unsafe {
-            geom_lookupid(&mut self.0, id.id)
+            geom_lookupid(&mut *self.0, id.id)
         };
         NonNull::new(raw)
             .map(|ident| Gident{ident, phantom: PhantomData})
@@ -427,20 +428,20 @@ impl Tree {
     /// Construct a new `Tree` representing all available geom providers
     pub fn new() -> Result<Self> {
         let (inner, r) = unsafe {
-            let mut inner = MaybeUninit::<gmesh>::uninit();
-            let r = geom_gettree(inner.as_mut_ptr());
+            let mut inner = Box::pin(mem::zeroed());
+            let r = geom_gettree(&mut *inner);
             (inner, r)
         };
         if r != 0 {
             Err(Error::last_os_error())
         } else {
-            Ok(Tree(unsafe{inner.assume_init()}))
+            Ok(Tree(inner))
         }
     }
 }
 
 impl Drop for Tree {
     fn drop(&mut self) {
-        unsafe { geom_deletetree(&mut self.0) };
+        unsafe { geom_deletetree(&mut *self.0) };
     }
 }
