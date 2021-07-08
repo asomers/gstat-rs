@@ -31,11 +31,9 @@ macro_rules! delta {
 
 macro_rules! delta_t {
     ($cur: expr, $prev: expr, $bintime:expr) => {
-    //($cur: ident, $prev: ident, $field:ident, $index:expr) => {
         {
             // BINTIME_SCALE is 1 / 2**64
             const BINTIME_SCALE: f64 = 5.42101086242752217003726400434970855712890625e-20;
-            //let idx = $index as usize;
             let old: bintime = if let Some(prev) = $prev {
                 $bintime(unsafe {prev.devstat.as_ref() })
             } else {
@@ -50,7 +48,7 @@ macro_rules! delta_t {
 
 macro_rules! fields {
     ($self: ident, $meth: ident, $field: ident) => {
-        pub fn $meth($self) -> u64 {
+        pub fn $meth(&$self) -> u64 {
             $self.$field
         }
     }
@@ -58,7 +56,7 @@ macro_rules! fields {
 
 macro_rules! fields_per_sec {
     ($self: ident, $meth: ident, $field: ident) => {
-        pub fn $meth($self) -> f64 {
+        pub fn $meth(&$self) -> f64 {
             if $self.etime > 0.0 {
                 $self.$field as f64 / $self.etime
             } else {
@@ -70,7 +68,7 @@ macro_rules! fields_per_sec {
 
 macro_rules! kb_per_xfer {
     ($self: ident, $meth: ident, $xfers: ident, $bytes: ident) => {
-        pub fn $meth($self) -> f64 {
+        pub fn $meth(&$self) -> f64 {
             if $self.$xfers > 0 {
                 $self.$bytes as f64 / (1<<10) as f64 / $self.$xfers as f64
             } else {
@@ -82,7 +80,7 @@ macro_rules! kb_per_xfer {
 
 macro_rules! mb_per_sec {
     ($self: ident, $meth: ident, $field: ident) => {
-        pub fn $meth($self) -> f64 {
+        pub fn $meth(&$self) -> f64 {
             if $self.etime > 0.0 {
                 $self.$field as f64 / (1<<20) as f64 / $self.etime
             } else {
@@ -94,7 +92,7 @@ macro_rules! mb_per_sec {
 
 macro_rules! ms_per_xfer {
     ($self: ident, $meth: ident, $xfers: ident, $duration: ident) => {
-        pub fn $meth($self) -> f64 {
+        pub fn $meth(&$self) -> f64 {
             if $self.$xfers > 0 {
                 $self.$duration * 1000.0 / $self.$xfers as f64
             } else {
@@ -121,6 +119,15 @@ lazy_static! {
 pub struct Devstat<'a>{
     devstat: NonNull<devstat>,
     phantom: PhantomData<&'a devstat>
+}
+
+impl<'a> Devstat<'a> {
+    pub fn id(&'a self) -> Id<'a> {
+        Id {
+            id: unsafe { self.devstat.as_ref() }.id,
+            phantom: PhantomData
+        }
+    }
 }
 
 /// Identifies an element in the Geom [`Tree`]
