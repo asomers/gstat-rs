@@ -25,22 +25,30 @@ use tui::{
 /// The data for one element in the table, usually a Geom provider
 #[derive(Debug, Default)]
 struct Element {
-    name: String,
     qd: u32,
     ops_s: f64,
-    r_s: f64
+    r_s: f64,
+    kbps_r: f64,
+    ms_r: f64,
+    w_s: f64,
+    kbps_w: f64,
+    ms_w: f64,
+    pct_busy: f64,
+    name: String,
 }
 
 impl Element {
-    fn new(name: &str, qd: u32, ops_s: f64, r_s: f64) -> Self {
-        Element {name: name.to_owned(), qd, ops_s, r_s}
-    }
-
     fn row(&self) -> Row {
         Row::new([
             Cell::from(format!("{:>4}", self.qd)),
             Cell::from(format!("{:>6.0}", self.ops_s)),
             Cell::from(format!("{:>6.0}", self.r_s)),
+            Cell::from(format!("{:>6.0}", self.kbps_r)),
+            Cell::from(format!("{:>6.1}", self.ms_r)),
+            Cell::from(format!("{:>6.0}", self.w_s)),
+            Cell::from(format!("{:>6.0}", self.kbps_w)),
+            Cell::from(format!("{:>6.1}", self.ms_w)),
+            Cell::from(format!("{:>6.1}", self.pct_busy)),
             Cell::from(self.name.as_str()),
         ])
     }
@@ -125,13 +133,18 @@ impl StatefulTable {
             if let Some(gident) = self.tree.lookup(curstat.id()) {
                 if gident.rank().is_some() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
-                    self.data.items.push(Element::new(
-                            &gident.name().to_string_lossy(),
-                            stats.queue_length(),
-                            stats.transfers_per_second(),
-                            stats.transfers_per_second_read()
-                        )
-                    );
+                    self.data.items.push(Element{
+                        name: gident.name().to_string_lossy().to_string(),
+                        qd: stats.queue_length(),
+                        ops_s: stats.transfers_per_second(),
+                        r_s: stats.transfers_per_second_read(),
+                        kbps_r: stats.mb_per_second_read() * 1024.0,
+                        ms_r: stats.ms_per_transaction_read(),
+                        w_s: stats.transfers_per_second_write(),
+                        kbps_w: stats.mb_per_second_write() * 1024.0,
+                        ms_w: stats.ms_per_transaction_write(),
+                        pct_busy: stats.busy_pct()
+                    });
                 }
             }
         }
@@ -160,7 +173,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let header_cells = ["L(q)", " ops/s", "   r/s", "Name"]
+            let header_cells = ["L(q)", " ops/s", "   r/s", "  kBps", "  ms/r",
+                "   w/s", "  kBps", "  ms/w", " %busy", "Name"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
             let header = Row::new(header_cells)
@@ -174,6 +188,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .highlight_style(selected_style)
                 .widths(&[
                     Constraint::Min(5),
+                    Constraint::Min(7),
+                    Constraint::Min(7),
+                    Constraint::Min(7),
+                    Constraint::Min(7),
+                    Constraint::Min(7),
+                    Constraint::Min(7),
                     Constraint::Min(7),
                     Constraint::Min(7),
                     Constraint::Min(10),
