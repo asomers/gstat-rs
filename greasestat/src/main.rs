@@ -12,15 +12,13 @@ use tui::{
     Terminal,
 };
 
-pub struct StatefulTable<'a> {
-    state: TableState,
-    items: Vec<Vec<&'a str>>,
+struct DataSource<'a> {
+    items: Vec<Vec<&'a str>>
 }
 
-impl<'a> StatefulTable<'a> {
-    fn new() -> StatefulTable<'a> {
-        StatefulTable {
-            state: TableState::default(),
+impl<'a> DataSource<'a> {
+    fn new() -> DataSource<'a> {
+        Self {
             items: vec![
                 vec!["Row11", "Row12", "Row13"],
                 vec!["Row21", "Row22", "Row23"],
@@ -41,13 +39,27 @@ impl<'a> StatefulTable<'a> {
                 vec!["Row171", "Row172", "Row173"],
                 vec!["Row181", "Row182", "Row183"],
                 vec!["Row191", "Row192", "Row193"],
-            ],
+            ]
+        }
+    }
+}
+
+pub struct StatefulTable<'a> {
+    state: TableState,
+    data: DataSource<'a>
+}
+
+impl<'a> StatefulTable<'a> {
+    fn new() -> StatefulTable<'a> {
+        StatefulTable {
+            state: TableState::default(),
+            data: DataSource::new(),
         }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
+                if i >= self.data.items.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -62,7 +74,7 @@ impl<'a> StatefulTable<'a> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    self.data.items.len() - 1
                 } else {
                     i - 1
                 }
@@ -101,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .style(normal_style)
                 .height(1)
                 .bottom_margin(1);
-            let rows = table.items.iter().map(|item| {
+            let rows = table.data.items.iter().map(|item| {
                 let height = item
                     .iter()
                     .map(|content| content.chars().filter(|c| *c == '\n').count())
