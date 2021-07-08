@@ -155,13 +155,16 @@ impl<'a> Gident<'a> {
         }
     }
 
-    pub fn rank(&self) -> u32 {
+    pub fn rank(&self) -> Option<u32> {
         unsafe{
             let gprovider = self.ident.as_ref().lg_ptr as *const gprovider;
             assert!(!gprovider.is_null());
             let geom = (*gprovider).lg_geom;
-            assert!(!geom.is_null());
-            (*geom).lg_rank
+            if geom.is_null() {
+                None
+            } else {
+                Some((*geom).lg_rank)
+            }
         }
     }
 }
