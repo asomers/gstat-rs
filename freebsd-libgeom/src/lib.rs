@@ -181,6 +181,43 @@ pub struct Id<'a> {
     phantom: PhantomData<&'a Devstat<'a>>
 }
 
+/// Iterates through a pair of [`Snapshot`]s in lockstep, where one snapshot is
+/// optional.
+pub struct SnapshotPairIter<'a> {
+    cur: &'a mut Snapshot,
+    prev: Option<&'a mut Snapshot>
+}
+
+impl<'a> SnapshotPairIter<'a> {
+    fn new(cur: &'a mut Snapshot, prev: Option<&'a mut Snapshot>) -> Self {
+        SnapshotPairIter{cur, prev}
+    }
+}
+
+impl<'a> Iterator for SnapshotPairIter<'a> {
+    type Item = (Devstat<'a>, Option<Devstat<'a>>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ps = if let Some(prev) = self.prev.as_mut() {
+            let praw = unsafe {geom_stats_snapshot_next(prev.0.as_mut()) };
+            NonNull::new(praw)
+                .map(|devstat| Devstat{devstat, phantom: PhantomData})
+        } else {
+            None
+        };
+        let craw = unsafe {geom_stats_snapshot_next(self.cur.0.as_mut()) };
+        NonNull::new(craw)
+            .map(|devstat| (Devstat{devstat, phantom: PhantomData}, ps))
+    }
+}
+
+impl<'a> Drop for SnapshotPairIter<'a> {
+    fn drop(&mut self) {
+        self.cur.reset();
+        self.prev.as_mut().map(|prev| prev.reset());
+    }
+}
+
 /// A geom statistics snapshot.
 ///
 // FreeBSD BUG: geom_stats_snapshot_get should return an opaque pointer instead
@@ -191,6 +228,14 @@ impl Snapshot {
     /// Iterate through all devices described by the snapshot
     pub fn iter<'a>(&'a mut self) -> SnapshotIter<'a> {
         SnapshotIter(self)
+    }
+
+    /// Iterates through a pair of [`Snapshot`]s in lockstep, where one snapshot
+    /// is optional.
+    pub fn iter_pair<'a>(&'a mut self, prev: Option<&'a mut Snapshot>)
+        -> SnapshotPairIter<'a>
+    {
+        SnapshotPairIter::new(self, prev)
     }
 
     /// Acquires a new snapshot of the raw data from the kernel.

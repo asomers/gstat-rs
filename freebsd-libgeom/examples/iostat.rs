@@ -33,17 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         } else {
             boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
         };
-        let mut prev_iter = if let Some(prev) = previous.as_mut() {
-            Some(prev.iter())
-        } else {
-            None
-        };
-        for curstat in current.iter() {
-            let prevstat = if let Some(pi) = prev_iter.as_mut() {
-                Some(pi.next().unwrap())
-            } else {
-                None
-            };
+        for (curstat, prevstat) in current.iter_pair(previous.as_mut()) {
             if let Some(gident) = tree.lookup(curstat.id()) {
                 if let Some(1) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
@@ -63,7 +53,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
-        drop(prev_iter);
         previous = Some(current);
         sleep(Duration::from_secs(1));
     }
