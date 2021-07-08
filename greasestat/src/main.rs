@@ -2,13 +2,23 @@
 mod util;
 
 use crate::util::event::{Event, Events};
-use std::{error::Error, io};
-use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
+use freebsd_libgeom::{Snapshot, Statistics, Tree};
+use std::{
+    error::Error,
+    io,
+    mem
+};
+use termion::{
+    event::Key,
+    input::MouseTerminal,
+    raw::IntoRawMode,
+    screen::AlternateScreen
+};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table, TableState},
+    widgets::{Block, Cell, Row, Table, TableState},
     Terminal,
 };
 
@@ -38,7 +48,7 @@ struct DataSource {
 }
 
 impl DataSource {
-    fn new() -> DataSource {
+    fn demo() -> DataSource {
         Self {
             items: vec![
                 Element::new("nvd0", 0, 0.0),
@@ -55,19 +65,33 @@ impl DataSource {
             ]
         }
     }
+
 }
 
 pub struct StatefulTable {
+    prev: Option<Snapshot>,
+    cur: Snapshot,
+    tree: Tree,
     state: TableState,
     data: DataSource
 }
 
 impl StatefulTable {
-    fn new() -> StatefulTable {
-        StatefulTable {
+    fn new() -> io::Result<StatefulTable> {
+        let tree = Tree::new()?;
+        let prev = None;
+        // XXX difference from gstat: the first display will show stats since
+        // boot, like iostat.
+        let cur = Snapshot::new()?;
+        let mut table = StatefulTable {
+            prev,
+            cur,
+            tree,
             state: TableState::default(),
-            data: DataSource::new(),
-        }
+            data: DataSource::demo(),
+        };
+        table.regen();
+        Ok(table)
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
@@ -96,6 +120,38 @@ impl StatefulTable {
         };
         self.state.select(Some(i));
     }
+
+    pub fn refresh(&mut self) -> io::Result<()> {
+        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
+        self.regen();
+        Ok(())
+    }
+
+    /// Regenerate the DataSource
+    fn regen(&mut self) {
+        let etime = if let Some(prev) = self.prev.as_mut() {
+            f64::from(self.cur.timestamp() - prev.timestamp())
+        } else {
+            // TODO: get it with Nix
+            //let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
+            //boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
+            1.0
+        };
+        self.data.items.clear();
+        for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
+            if let Some(gident) = self.tree.lookup(curstat.id()) {
+                if gident.rank().is_some() {
+                    let stats = Statistics::compute(curstat, prevstat, etime);
+                    self.data.items.push(Element::new(
+                            &gident.name().to_string_lossy(),
+                            stats.queue_length(),
+                            stats.transfers_per_second()
+                        )
+                    );
+                }
+            }
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -108,7 +164,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let events = Events::new();
 
-    let mut table = StatefulTable::new();
+    let mut table = StatefulTable::new()?;
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -156,6 +212,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         } else {
             // Timer tick.
+            table.refresh()?;
         };
     }
 
