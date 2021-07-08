@@ -413,6 +413,12 @@ impl<'a> Statistics<'a> {
 // The wrapper is necessary just to be proper CamelCase
 pub struct Timespec(freebsd_libgeom_sys::timespec);
 
+impl From<Timespec> for f64 {
+    fn from(ts: Timespec) -> f64 {
+        ts.0.tv_sec as f64 + ts.0.tv_nsec as f64 * 1e-9
+    }
+}
+
 /// Describes the entire Geom heirarchy.
 #[derive(Debug)]
 #[repr(transparent)]
