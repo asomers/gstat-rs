@@ -110,6 +110,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut table = StatefulTable::new();
 
+    let normal_style = Style::default().bg(Color::Blue);
+    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+
     // Input
     loop {
         terminal.draw(|f| {
@@ -117,8 +120,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-            let normal_style = Style::default().bg(Color::Blue);
             let header_cells = ["L(q)", " ops/s", "Name"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
