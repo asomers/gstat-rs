@@ -23,49 +23,32 @@ use tui::{
 };
 
 /// The data for one element in the table, usually a Geom provider
+#[derive(Debug, Default)]
 struct Element {
     name: String,
     qd: u32,
-    ops_s: f64
+    ops_s: f64,
+    r_s: f64
 }
 
 impl Element {
-    fn new(name: &str, qd: u32, ops_s: f64) -> Self {
-        Element {name: name.to_owned(), qd, ops_s}
+    fn new(name: &str, qd: u32, ops_s: f64, r_s: f64) -> Self {
+        Element {name: name.to_owned(), qd, ops_s, r_s}
     }
 
     fn row(&self) -> Row {
         Row::new([
             Cell::from(format!("{:>4}", self.qd)),
             Cell::from(format!("{:>6.0}", self.ops_s)),
+            Cell::from(format!("{:>6.0}", self.r_s)),
             Cell::from(self.name.as_str()),
         ])
     }
 }
 
+#[derive(Debug, Default)]
 struct DataSource {
     items: Vec<Element>
-}
-
-impl DataSource {
-    fn demo() -> DataSource {
-        Self {
-            items: vec![
-                Element::new("nvd0", 0, 0.0),
-                Element::new("nvd0p1", 0, 0.0),
-                Element::new("nvd0p2", 0, 0.0),
-                Element::new("nvd0p3", 0, 0.0),
-                Element::new("nvd0p4", 0, 0.0),
-                Element::new("gpt/gptboot0", 0, 0.0),
-                Element::new("gpt/bfffs0", 0, 0.0),
-                Element::new("ada0", 0, 0.0),
-                Element::new("cd0", 0, 0.0),
-                Element::new("ada1", 0, 0.0),
-                Element::new("ufsid/0123456789abcdef", 0, 0.0),
-            ]
-        }
-    }
-
 }
 
 pub struct StatefulTable {
@@ -88,7 +71,7 @@ impl StatefulTable {
             cur,
             tree,
             state: TableState::default(),
-            data: DataSource::demo(),
+            data: DataSource::default(),
         };
         table.regen();
         Ok(table)
@@ -145,7 +128,8 @@ impl StatefulTable {
                     self.data.items.push(Element::new(
                             &gident.name().to_string_lossy(),
                             stats.queue_length(),
-                            stats.transfers_per_second()
+                            stats.transfers_per_second(),
+                            stats.transfers_per_second_read()
                         )
                     );
                 }
@@ -176,7 +160,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let header_cells = ["L(q)", " ops/s", "Name"]
+            let header_cells = ["L(q)", " ops/s", "   r/s", "Name"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
             let header = Row::new(header_cells)
@@ -190,6 +174,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .highlight_style(selected_style)
                 .widths(&[
                     Constraint::Min(5),
+                    Constraint::Min(7),
                     Constraint::Min(7),
                     Constraint::Min(10),
                 ])
