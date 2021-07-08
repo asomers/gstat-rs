@@ -55,11 +55,11 @@ impl Events {
         };
         let tick_handle = {
             thread::spawn(move || loop {
+                thread::sleep(config.tick_rate);
                 if let Err(err) = tx.send(Event::Tick) {
                     eprintln!("{}", err);
                     break;
                 }
-                thread::sleep(config.tick_rate);
             })
         };
         Events {
