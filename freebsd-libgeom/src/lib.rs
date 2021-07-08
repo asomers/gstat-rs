@@ -42,8 +42,12 @@ macro_rules! delta_t {
                 bintime{sec: 0, frac: 0}
             };
             let new: bintime = $bintime(unsafe {$cur.devstat.as_ref() });
-            (new.sec - old.sec) as f64
-                + (new.frac - old.frac) as f64 * BINTIME_SCALE
+            let mut dsec = new.sec - old.sec;
+            let (dfrac, overflow) = new.frac.overflowing_sub(old.frac);
+            if overflow {
+                dsec -= 1;
+            }
+            dsec as f64 + dfrac as f64 * BINTIME_SCALE
         }
     }
 }
@@ -479,5 +483,69 @@ impl Tree {
 impl Drop for Tree {
     fn drop(&mut self) {
         unsafe { geom_deletetree(&mut *self.0) };
+    }
+}
+
+#[cfg(test)]
+mod t {
+    use super::*;
+    use approx::*;
+
+    mod delta_t {
+        use super::*;
+
+        macro_rules! devstat {
+            ($bintime: expr) => {{
+                let inner = unsafe{ devstat {
+                    busy_time: $bintime,
+                    .. mem::zeroed()
+                }};
+                let outer = Devstat {
+                    devstat: NonNull::from(&inner),
+                    phantom: PhantomData
+                };
+                (outer, inner)
+            }}
+        }
+
+        #[test]
+        fn zero() {
+            let (prev, _prev) = devstat!(bintime{sec: 0, frac: 0});
+            let (cur, _cur) = devstat!(bintime{sec: 0, frac: 0});
+            let r = delta_t!(cur, Some(prev), |ds: &devstat| ds.busy_time);
+            assert_relative_eq!(r, 0.0);
+        }
+
+        #[test]
+        fn half() {
+            let (prev, _prev) = devstat!(bintime{sec: 0, frac: 0});
+            let (cur, _cur) = devstat!(bintime{sec: 0, frac: 1<<63});
+            let r = delta_t!(cur, Some(prev), |ds: &devstat| ds.busy_time);
+            assert_relative_eq!(r, 0.5);
+        }
+
+        #[test]
+        fn half2() {
+            let (prev, _prev) = devstat!(bintime{sec: 0, frac: 1<<63});
+            let (cur, _cur) = devstat!(bintime{sec: 1, frac: 0});
+            let r = delta_t!(cur, Some(prev), |ds: &devstat| ds.busy_time);
+            assert_relative_eq!(r, 0.5);
+        }
+
+        #[test]
+        fn one() {
+            let (prev, _prev) = devstat!(bintime{sec: 0, frac: 0});
+            let (cur, _cur) = devstat!(bintime{sec: 1, frac: 0});
+            let r = delta_t!(cur, Some(prev), |ds: &devstat| ds.busy_time);
+            assert_relative_eq!(r, 1.0);
+        }
+
+        #[test]
+        fn neg() {
+            let (prev, _prev) = devstat!(bintime{sec: 1, frac: 1<<62});
+            let (cur, _cur) = devstat!(bintime{sec: 0, frac: 0});
+            let r = delta_t!(cur, Some(prev), |ds: &devstat| ds.busy_time);
+            assert_relative_eq!(r, -1.25);
+        }
     }
 }
