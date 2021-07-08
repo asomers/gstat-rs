@@ -12,45 +12,58 @@ use tui::{
     Terminal,
 };
 
-struct DataSource<'a> {
-    items: Vec<Vec<&'a str>>
+/// The data for one element in the table, usually a Geom provider
+struct Element {
+    name: String,
+    qd: u32,
+    ops_s: f64
 }
 
-impl<'a> DataSource<'a> {
-    fn new() -> DataSource<'a> {
+impl Element {
+    fn new(name: &str, qd: u32, ops_s: f64) -> Self {
+        Element {name: name.to_owned(), qd, ops_s}
+    }
+
+    fn row(&self) -> Row {
+        Row::new([
+            Cell::from(format!("{:>4}", self.qd)),
+            Cell::from(format!("{:>6.0}", self.ops_s)),
+            Cell::from(self.name.as_str()),
+        ])
+    }
+}
+
+struct DataSource {
+    items: Vec<Element>
+}
+
+impl DataSource {
+    fn new() -> DataSource {
         Self {
             items: vec![
-                vec!["Row11", "Row12", "Row13"],
-                vec!["Row21", "Row22", "Row23"],
-                vec!["Row31", "Row32", "Row33"],
-                vec!["Row41", "Row42", "Row43"],
-                vec!["Row51", "Row52", "Row53"],
-                vec!["Row61", "Row62", "Row63"],
-                vec!["Row71", "Row72", "Row73"],
-                vec!["Row81", "Row82", "Row83"],
-                vec!["Row91", "Row92", "Row93"],
-                vec!["Row101", "Row102", "Row103"],
-                vec!["Row111", "Row112", "Row113"],
-                vec!["Row121", "Row122", "Row123"],
-                vec!["Row131", "Row132", "Row133"],
-                vec!["Row141", "Row142", "Row143"],
-                vec!["Row151", "Row152", "Row153"],
-                vec!["Row161", "Row162", "Row163"],
-                vec!["Row171", "Row172", "Row173"],
-                vec!["Row181", "Row182", "Row183"],
-                vec!["Row191", "Row192", "Row193"],
+                Element::new("nvd0", 0, 0.0),
+                Element::new("nvd0p1", 0, 0.0),
+                Element::new("nvd0p2", 0, 0.0),
+                Element::new("nvd0p3", 0, 0.0),
+                Element::new("nvd0p4", 0, 0.0),
+                Element::new("gpt/gptboot0", 0, 0.0),
+                Element::new("gpt/bfffs0", 0, 0.0),
+                Element::new("ada0", 0, 0.0),
+                Element::new("cd0", 0, 0.0),
+                Element::new("ada1", 0, 0.0),
+                Element::new("ufsid/0123456789abcdef", 0, 0.0),
             ]
         }
     }
 }
 
-pub struct StatefulTable<'a> {
+pub struct StatefulTable {
     state: TableState,
-    data: DataSource<'a>
+    data: DataSource
 }
 
-impl<'a> StatefulTable<'a> {
-    fn new() -> StatefulTable<'a> {
+impl StatefulTable {
+    fn new() -> StatefulTable {
         StatefulTable {
             state: TableState::default(),
             data: DataSource::new(),
@@ -106,22 +119,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let selected_style = Style::default().add_modifier(Modifier::REVERSED);
             let normal_style = Style::default().bg(Color::Blue);
-            let header_cells = ["L(q)", "ops/s", "Name"]
+            let header_cells = ["L(q)", " ops/s", "Name"]
                 .iter()
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter().map(|item| {
-                let cells = item.iter().map(|c| Cell::from(*c));
-                Row::new(cells)
+                item.row()
             });
             let t = Table::new(rows)
                 .header(header)
                 .block(Block::default())
                 .highlight_style(selected_style)
                 .widths(&[
-                    Constraint::Min(10),
-                    Constraint::Min(10),
+                    Constraint::Min(5),
+                    Constraint::Min(7),
                     Constraint::Min(10),
                 ])
                 ;
