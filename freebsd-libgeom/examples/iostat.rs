@@ -25,12 +25,12 @@ fn main() -> Result<(), Box<dyn Error>> {
              "qlen",
              "%b"
              );
-    let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
     for _ in 0..2 {
         let mut current = Snapshot::new()?;
         let etime = if let Some(prev) = previous.as_mut() {
             f64::from(current.timestamp() - prev.timestamp())
         } else {
+            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
             boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
         };
         for (curstat, prevstat) in current.iter_pair(previous.as_mut()) {
