@@ -11,3 +11,6 @@ keywords = ["freebsd"]
 [dependencies]
 freebsd-libgeom-sys = { path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"
+
+[dev-dependencies]
+nix = "0.20.0"
