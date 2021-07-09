@@ -1,4 +1,4 @@
-use argh::FromArgs;
+use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use rustbox::{
     Event,
@@ -19,42 +19,45 @@ use tui::{
 };
 
 /// Drop-in compatible gstat(8) replacement
-#[derive(Debug, FromArgs)]
+// TODO: shorten the help options so they fit on 80 columns.
+#[derive(Debug, Options)]
 struct Cli {
+    #[options(help = "print help message")]
+    help: bool,
     /// only display providers that are at least 0.1% busy
-    #[argh(switch, short = 'a')]
+    #[options(short = 'a')]
     auto: bool,
     /// batch mode.  Collect numbers, print and exit. (unimplemented)
-    #[argh(switch, short = 'b')]
+    #[options(short = 'b')]
     batch: bool,
     /// endless batch mode.  Same as batch mode, but does not exit after
     /// collecting the first set of data. (unimplemented)
-    #[argh(switch, short = 'B')]
+    #[options(short = 'B')]
     endless_batch: bool,
     /// enable display of geom(4) consumers too. (unimplemented)
-    #[argh(switch, short = 'c')]
+    #[options(short = 'c')]
     consumers: bool,
     /// output in CSV.  Implies endless batch mode. (unimplemented)
-    #[argh(switch, short = 'C')]
+    #[options(short = 'C')]
     csv: bool,
     /// display statistics for delete (BIO_DELETE) operations. (unimplemented)
-    #[argh(switch, short = 'd')]
+    #[options(short = 'd')]
     delete: bool,
     /// only display devices with names matching filter, as a regex.
     /// (unimplemented)
-    #[argh(option, short = 'f')]
+    #[options(short = 'f')]
     filter: Option<String>,
     /// display statistics for other (BIO_FLUSH) operations. (unimplemented)
-    #[argh(switch, short = 'o')]
+    #[options(short = 'o')]
     other: bool,
     /// display block size statistics (unimplemented)
-    #[argh(switch, short = 's')]
+    #[options(short = 's')]
     size: bool,
     /// display update interval, in microseconds or with the specified unit
-    #[argh(option, short = 'I', default = "String::from(\"1s\")")]
-    interval: String,
+    #[options(short = 'I')]
+    interval: Option<String>,
     /// only display physical providers (those with rank of 1).
-    #[argh(switch, short = 'p')]
+    #[options(short = 'p')]
     physical: bool
 }
 
@@ -203,14 +206,17 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // argh bug: can't be fully gstat-compatible until /dev/multipath/mp_JB3_S52
-    // is fixed.
-    let mut cli: Cli = argh::from_env();
-    if cli.interval.parse::<i32>().is_ok() {
-        // Add the default units
-        cli.interval.push_str("us");
-    }
-    let mut tick_rate: Duration = humanize_rs::duration::parse(&cli.interval)?;
+    let mut cli: Cli = Cli::parse_args_default_or_exit();
+    let mut tick_rate: Duration = match cli.interval.as_mut() {
+        None => Duration::from_secs(1),
+        Some(s) => {
+            if s.parse::<i32>().is_ok() {
+                // Add the default units
+                s.push_str("us");
+            }
+            humanize_rs::duration::parse(&s)?
+        }
+    };
 
     // Terminal initialization
     let backend = RustboxBackend::new()?;
