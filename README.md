@@ -13,7 +13,7 @@ disks.  The key differences are:
 
 * gstat-rs does not support batch mode (`-b`) output, but hopefully will in the
   future.
-* gstat-rs does not display GEOM consumers (`-c`), because it can easily be
+* gstat-rs does not display GEOM consumers (`-c`), but it can easily be
   added if there's any demand for that feature.
 * gstat-rs does not yet support the `-d`, `-o`, and `-s` flags, but shortly
   will.
