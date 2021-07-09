@@ -8,6 +8,11 @@ description = "Rust bindings to FreeBSD's libgeom library"
 categories = ["api-bindings", "os::freebsd-apis"]
 keywords = ["freebsd"]
 
+[package.metadata.docs.rs]
+targets = [
+  "x86_64-unknown-freebsd",
+]
+
 [dependencies]
 freebsd-libgeom-sys = { version = "=0.1.0", path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"

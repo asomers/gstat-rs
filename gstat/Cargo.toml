@@ -8,6 +8,11 @@ description = "Enhanced replacement for FreeBSD's gstat utility"
 categories = ["command-line-utilities"]
 keywords = ["freebsd"]
 
+[package.metadata.docs.rs]
+targets = [
+  "x86_64-unknown-freebsd",
+]
+
 [dependencies]
 freebsd-libgeom = { version = "=0.1.0", path = "../freebsd-libgeom" }
 gumdrop = "0.8.0"

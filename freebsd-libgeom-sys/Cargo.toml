@@ -8,6 +8,11 @@ description = "Rust FFI bindings to FreeBSD's libgeom library"
 categories = ["external-ffi-bindings", "os::freebsd-apis"]
 keywords = ["freebsd"]
 
+[package.metadata.docs.rs]
+targets = [
+  "x86_64-unknown-freebsd",
+]
+
 [dependencies]
 
 [build-dependencies]
