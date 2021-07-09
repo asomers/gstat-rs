@@ -21,7 +21,7 @@ use tui::{
 /// Drop-in compatible gstat(8) replacement
 #[derive(Debug, FromArgs)]
 struct Cli {
-    /// only display providers that are at least 0.1% busy (unimplemented)
+    /// only display providers that are at least 0.1% busy
     #[argh(switch, short = 'a')]
     auto: bool,
     /// batch mode.  Collect numbers, print and exit. (unimplemented)
@@ -53,7 +53,7 @@ struct Cli {
     /// display update interval, in microseconds or with the specified unit
     #[argh(option, short = 'I', default = "String::from(\"1s\")")]
     interval: String,
-    /// only display physical providers (those with rank of 1). (unimplemented)
+    /// only display physical providers (those with rank of 1).
     #[argh(switch, short = 'p')]
     physical: bool
 }
@@ -71,6 +71,7 @@ struct Element {
     ms_w: f64,
     pct_busy: f64,
     name: String,
+    rank: u32,
 }
 
 impl Element {
@@ -180,10 +181,11 @@ impl StatefulTable {
         self.data.items.clear();
         for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
             if let Some(gident) = self.tree.lookup(curstat.id()) {
-                if gident.rank().is_some() {
+                if let Some(rank) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
                     self.data.items.push(Element{
                         name: gident.name().to_string_lossy().to_string(),
+                        rank,
                         qd: stats.queue_length(),
                         ops_s: stats.transfers_per_second(),
                         r_s: stats.transfers_per_second_read(),
@@ -201,6 +203,8 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // argh bug: can't be fully gstat-compatible until /dev/multipath/mp_JB3_S52
+    // is fixed.
     let mut cli: Cli = argh::from_env();
     if cli.interval.parse::<i32>().is_ok() {
         // Add the default units
@@ -230,9 +234,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
             let header = Row::new(header_cells)
                 .style(normal_style);
-            let rows = table.data.items.iter().map(|item| {
-                item.row()
-            });
+            let rows = table.data.items.iter()
+                .filter(|item| !cli.auto || item.pct_busy > 0.1)
+                .filter(|item| !cli.physical || item.rank == 1)
+                .map(|item| {
+                    item.row()
+                });
             let t = Table::new(rows)
                 .header(header)
                 .block(Block::default())
