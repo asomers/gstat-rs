@@ -1,3 +1,4 @@
+use argh::FromArgs;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use rustbox::{
     Event,
@@ -16,6 +17,47 @@ use tui::{
     widgets::{Block, Cell, Row, Table, TableState},
     Terminal,
 };
+
+/// Drop-in compatible gstat(8) replacement
+#[derive(Debug, FromArgs)]
+struct Cli {
+    /// only display providers that are at least 0.1% busy (unimplemented)
+    #[argh(switch, short = 'a')]
+    auto: bool,
+    /// batch mode.  Collect numbers, print and exit. (unimplemented)
+    #[argh(switch, short = 'b')]
+    batch: bool,
+    /// endless batch mode.  Same as batch mode, but does not exit after
+    /// collecting the first set of data. (unimplemented)
+    #[argh(switch, short = 'B')]
+    endless_batch: bool,
+    /// enable display of geom(4) consumers too. (unimplemented)
+    #[argh(switch, short = 'c')]
+    consumers: bool,
+    /// output in CSV.  Implies endless batch mode. (unimplemented)
+    #[argh(switch, short = 'C')]
+    csv: bool,
+    /// display statistics for delete (BIO_DELETE) operations. (unimplemented)
+    #[argh(switch, short = 'd')]
+    delete: bool,
+    /// only display devices with names matching filter, as a regex.
+    /// (unimplemented)
+    #[argh(option, short = 'f')]
+    filter: Option<String>,
+    /// display statistics for other (BIO_FLUSH) operations. (unimplemented)
+    #[argh(switch, short = 'o')]
+    other: bool,
+    /// display block size statistics (unimplemented)
+    #[argh(switch, short = 's')]
+    size: bool,
+    /// display update interval, in microseconds or with the specified unit
+    /// (unimplemented)
+    #[argh(option, short = 'I', default = "String::from(\"1s\")")]
+    interval: String,
+    /// only display physical providers (those with rank of 1). (unimplemented)
+    #[argh(switch, short = 'p')]
+    physical: bool
+}
 
 /// The data for one element in the table, usually a Geom provider
 #[derive(Debug, Default)]
@@ -147,6 +189,8 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let cli: Cli = argh::from_env();
+
     // Terminal initialization
     let backend = RustboxBackend::new()?;
     let mut terminal = Terminal::new(backend)?;

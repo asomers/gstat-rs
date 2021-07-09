@@ -6,6 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+argh = "0.1"
 freebsd-libgeom = { path = "../freebsd-libgeom" }
 rustbox = "0.11"
 tui = { version = "0.15.0", features = ["rustbox"] }
