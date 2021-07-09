@@ -75,6 +75,19 @@ struct Element {
 
 impl Element {
     fn row(&self) -> Row {
+        const BUSY_HIGH_THRESH: f64 = 80.0;
+        const BUSY_MEDIUM_THRESH: f64 = 50.0;
+
+        let color = if self.pct_busy > BUSY_HIGH_THRESH {
+            Color::Red
+        } else if self.pct_busy > BUSY_MEDIUM_THRESH {
+            Color::Magenta
+        } else {
+            Color::Green
+        };
+        let busy_cell = Cell::from(format!("{:>6.1}", self.pct_busy))
+            .style(Style::default().fg(color));
+
         Row::new([
             Cell::from(format!("{:>4}", self.qd)),
             Cell::from(format!("{:>6.0}", self.ops_s)),
@@ -84,7 +97,7 @@ impl Element {
             Cell::from(format!("{:>6.0}", self.w_s)),
             Cell::from(format!("{:>6.0}", self.kbps_w)),
             Cell::from(format!("{:>6.1}", self.ms_w)),
-            Cell::from(format!("{:>6.1}", self.pct_busy)),
+            busy_cell,
             Cell::from(self.name.as_str()),
         ])
     }
