@@ -14,11 +14,39 @@ use std::{
 };
 use tui::{
     backend::RustboxBackend,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
-    widgets::{Block, Cell, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
     Terminal,
 };
+
+/// helper function to create a one-line popup box as a fraction of r's width
+fn popup_layout(percent_x: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Max((r.height - 3)/2),
+                Constraint::Length(3),
+                Constraint::Max((r.height - 3)/2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
+}
+
 
 /// Drop-in compatible gstat(8) replacement
 // TODO: shorten the help options so they fit on 80 columns.
@@ -207,7 +235,7 @@ impl StatefulTable {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut cli: Cli = Cli::parse_args_default_or_exit();
-    let filter = cli.filter.as_ref().map(|s| Regex::new(s).unwrap());
+    let mut filter = cli.filter.as_ref().map(|s| Regex::new(s).unwrap());
     let mut tick_rate: Duration = match cli.interval.as_mut() {
         None => Duration::from_secs(1),
         Some(s) => {
@@ -218,6 +246,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             humanize_rs::duration::parse(&s)?
         }
     };
+    let mut editting_regex = false;
+    let mut new_regex = String::new();
 
     // Terminal initialization
     let backend = RustboxBackend::new()?;
@@ -228,7 +258,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
-    // Input
     loop {
         terminal.draw(|f| {
             let rects = Layout::default()
@@ -267,33 +296,71 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ])
                 ;
             f.render_stateful_widget(t, rects[0], &mut table.state);
+
+            if editting_regex {
+                let area = popup_layout(60, f.size());
+                let popup_box = Paragraph::new(new_regex.as_ref())
+                    .block(
+                        Block::default()
+                        .borders(Borders::ALL)
+                        .title("Filter regex")
+                    );
+                f.render_widget(Clear, area);
+                f.render_widget(popup_box, area);
+            }
         }).unwrap();
 
         match terminal.backend().rustbox().peek_event(tick_rate, false) {
             Ok(Event::KeyEvent(key)) => {
-                match key {
-                    Key::Char('<') => {
-                        tick_rate /= 2;
+                if editting_regex {
+                    match key {
+                        Key::Enter => {
+                            editting_regex = false;
+                            filter = Some(Regex::new(&new_regex)?);
+                        }
+                        Key::Char(c) => {
+                            new_regex.push(c);
+                        }
+                        Key::Backspace => {
+                            new_regex.pop();
+                        }
+                        Key::Esc => {
+                            editting_regex = false;
+                        }
+                        _ => {}
                     }
-                    Key::Char('>') => {
-                        tick_rate *= 2;
+                } else {
+                    match key {
+                        Key::Char('<') => {
+                            tick_rate /= 2;
+                        }
+                        Key::Char('>') => {
+                            tick_rate *= 2;
+                        }
+                        Key::Char('a') => {
+                            cli.auto ^= true;
+                        }
+                        Key::Char('p') => {
+                            cli.physical ^= true;
+                        }
+                        Key::Char('F') => {
+                            filter = None;
+                        }
+                        Key::Char('f') => {
+                            editting_regex = true;
+                            new_regex = String::new();
+                        }
+                        Key::Char('q') => {
+                            break;
+                        }
+                        Key::Down => {
+                            table.next();
+                        }
+                        Key::Up => {
+                            table.previous();
+                        }
+                        _ => {}
                     }
-                    Key::Char('a') => {
-                        cli.auto ^= true;
-                    }
-                    Key::Char('p') => {
-                        cli.physical ^= true;
-                    }
-                    Key::Char('q') => {
-                        break;
-                    }
-                    Key::Down => {
-                        table.next();
-                    }
-                    Key::Up => {
-                        table.previous();
-                    }
-                    _ => {}
                 }
             },
             Ok(Event::NoEvent) => {
