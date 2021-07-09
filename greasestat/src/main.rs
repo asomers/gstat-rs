@@ -1,5 +1,6 @@
 use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
+use regex::Regex;
 use rustbox::{
     Event,
     keyboard::Key
@@ -44,7 +45,6 @@ struct Cli {
     #[options(short = 'd')]
     delete: bool,
     /// only display devices with names matching filter, as a regex.
-    /// (unimplemented)
     #[options(short = 'f')]
     filter: Option<String>,
     /// display statistics for other (BIO_FLUSH) operations. (unimplemented)
@@ -207,6 +207,7 @@ impl StatefulTable {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut cli: Cli = Cli::parse_args_default_or_exit();
+    let filter = cli.filter.as_ref().map(|s| Regex::new(s).unwrap());
     let mut tick_rate: Duration = match cli.interval.as_mut() {
         None => Duration::from_secs(1),
         Some(s) => {
@@ -243,7 +244,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             let rows = table.data.items.iter()
                 .filter(|item| !cli.auto || item.pct_busy > 0.1)
                 .filter(|item| !cli.physical || item.rank == 1)
-                .map(|item| {
+                .filter(|item| filter.as_ref().map(|f| f.is_match(&item.name))
+                        .unwrap_or(true)
+                ).map(|item| {
                     item.row()
                 });
             let t = Table::new(rows)
