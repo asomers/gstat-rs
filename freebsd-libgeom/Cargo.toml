@@ -9,7 +9,7 @@ categories = ["api-bindings", "os::freebsd-apis"]
 keywords = ["freebsd"]
 
 [dependencies]
-freebsd-libgeom-sys = { path = "../freebsd-libgeom-sys" }
+freebsd-libgeom-sys = { version = "=0.1.0", path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"
 
 [dev-dependencies]
