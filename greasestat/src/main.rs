@@ -1,5 +1,6 @@
 use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
+use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
 use rustbox::{
     Event,
@@ -134,7 +135,7 @@ impl StatefulTable {
             state: TableState::default(),
             data: DataSource::default(),
         };
-        table.regen();
+        table.regen()?;
         Ok(table)
     }
     pub fn next(&mut self) {
@@ -167,19 +168,17 @@ impl StatefulTable {
 
     pub fn refresh(&mut self) -> io::Result<()> {
         self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
-        self.regen();
+        self.regen()?;
         Ok(())
     }
 
     /// Regenerate the DataSource
-    fn regen(&mut self) {
+    fn regen(&mut self) -> io::Result<()> {
         let etime = if let Some(prev) = self.prev.as_mut() {
             f64::from(self.cur.timestamp() - prev.timestamp())
         } else {
-            // TODO: get it with Nix
-            //let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
-            //boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
-            1.0
+            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
+            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
         };
         self.data.items.clear();
         for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
@@ -202,6 +201,7 @@ impl StatefulTable {
                 }
             }
         }
+        Ok(())
     }
 }
 
