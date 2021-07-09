@@ -278,6 +278,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Key::Char('>') => {
                         tick_rate *= 2;
                     }
+                    Key::Char('a') => {
+                        cli.auto ^= true;
+                    }
+                    Key::Char('p') => {
+                        cli.physical ^= true;
+                    }
                     Key::Char('q') => {
                         break;
                     }
