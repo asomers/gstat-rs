@@ -1,0 +1,59 @@
+common: &COMMON
+  env:
+    HOME: /tmp # cargo needs it
+    RUST_BACKTRACE: full  # Better info for debugging test failures.
+  setup_script:
+    - pkg install -y python
+    - fetch https://sh.rustup.rs -o rustup.sh
+    - sh rustup.sh -y --profile=minimal --default-toolchain ${VERSION}-x86_64-unknown-freebsd
+  cargo_cache:
+    folder: $HOME/.cargo/registry
+    fingerprint_script: cat Cargo.lock || echo ""
+  build_script:
+    - . $HOME/.cargo/env
+    - cargo build --all
+  test_script:
+    - . $HOME/.cargo/env
+    - cargo test --all
+  iostat_script:
+    # Run iostat as a smoketest of freebsd-libgeom
+    - . $HOME/.cargo/env
+    - cargo run --example iostat
+  # Until -b works, there's no way to run gstat non-interactively
+
+task:
+  matrix:
+    env:
+      VERSION: 1.52.1
+    - name: FreeBSD 14.0-CURRENT MSRV
+      freebsd_instance:
+        image: freebsd-14-0-snap
+    - name: FreeBSD 13.0 MSRV
+      freebsd_instance:
+        image: freebsd-13-0-release-amd64
+    - name: FreeBSD 12.2 MSRV
+      freebsd_instance:
+        image: freebsd-12-2-release-amd64
+    - name: FreeBSD 11.4 MSRV
+      freebsd_instance:
+        image: freebsd-11-4-release-amd64
+  << : *COMMON
+  before_cache_script: rm -rf $HOME/.cargo/registry/index
+
+task:
+  name: FreeBSD 13.0 nightly
+  env:
+    VERSION: nightly
+  freebsd_instance:
+    image: freebsd-13-0-release-amd64
+  << : *COMMON
+  clippy_script:
+    - . $HOME/.cargo/env
+    - rustup component add clippy
+    - cargo clippy --all-features --all-targets -- -D warnings
+  # Test our minimal version spec
+  minver_test_script:
+    - . $HOME/.cargo/env
+    - cargo update -Zminimal-versions
+    - cargo check --all-targets
+  before_cache_script: rm -rf $HOME/.cargo/registry/index
