@@ -3,7 +3,7 @@ common: &COMMON
     HOME: /tmp # cargo needs it
     RUST_BACKTRACE: full  # Better info for debugging test failures.
   setup_script:
-    - pkg install -y python
+    - pkg install -y git-lite llvm python
     - fetch https://sh.rustup.rs -o rustup.sh
     - sh rustup.sh -y --profile=minimal --default-toolchain ${VERSION}-x86_64-unknown-freebsd
   cargo_cache:
@@ -22,12 +22,12 @@ common: &COMMON
   # Until -b works, there's no way to run gstat non-interactively
 
 task:
+  env:
+    VERSION: 1.52.1
   matrix:
-    env:
-      VERSION: 1.52.1
     - name: FreeBSD 14.0-CURRENT MSRV
       freebsd_instance:
-        image: freebsd-14-0-snap
+        image_family: freebsd-14-0-snap
     - name: FreeBSD 13.0 MSRV
       freebsd_instance:
         image: freebsd-13-0-release-amd64
@@ -53,7 +53,10 @@ task:
     - cargo clippy --all-features --all-targets -- -D warnings
   # Test our minimal version spec
   minver_test_script:
+    # We can't check minver for gstat itself, since rustbox fails to build with
+    # its minium specified versions.  So just check freebsd-libgeom.
     - . $HOME/.cargo/env
+    - cd freebsd-libgeom
     - cargo update -Zminimal-versions
     - cargo check --all-targets
   before_cache_script: rm -rf $HOME/.cargo/registry/index
