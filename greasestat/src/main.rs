@@ -193,7 +193,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Add the default units
         cli.interval.push_str("us");
     }
-    let tick_rate: Duration = humanize_rs::duration::parse(&cli.interval)?;
+    let mut tick_rate: Duration = humanize_rs::duration::parse(&cli.interval)?;
 
     // Terminal initialization
     let backend = RustboxBackend::new()?;
@@ -243,6 +243,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         match terminal.backend().rustbox().peek_event(tick_rate, false) {
             Ok(Event::KeyEvent(key)) => {
                 match key {
+                    Key::Char('<') => {
+                        tick_rate /= 2;
+                    }
+                    Key::Char('>') => {
+                        tick_rate *= 2;
+                    }
                     Key::Char('q') => {
                         break;
                     }
