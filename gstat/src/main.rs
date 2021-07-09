@@ -243,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // Add the default units
                 s.push_str("us");
             }
-            humanize_rs::duration::parse(&s)?
+            humanize_rs::duration::parse(s)?
         }
     };
     let mut editting_regex = false;

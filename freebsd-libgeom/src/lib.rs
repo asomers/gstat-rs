@@ -35,7 +35,7 @@ macro_rules! delta_t {
     ($cur: expr, $prev: expr, $bintime:expr) => {
         {
             // BINTIME_SCALE is 1 / 2**64
-            const BINTIME_SCALE: f64 = 5.42101086242752217003726400434970855712890625e-20;
+            const BINTIME_SCALE: f64 = 5.421010862427522e-20;
             let old: bintime = if let Some(prev) = $prev {
                 $bintime(unsafe {prev.devstat.as_ref() })
             } else {
@@ -214,7 +214,9 @@ impl<'a> Iterator for SnapshotPairIter<'a> {
 impl<'a> Drop for SnapshotPairIter<'a> {
     fn drop(&mut self) {
         self.cur.reset();
-        self.prev.as_mut().map(|prev| prev.reset());
+        if let Some(prev) = self.prev.as_mut() {
+            prev.reset()
+        }
     }
 }
 
@@ -226,7 +228,7 @@ pub struct Snapshot(NonNull<c_void>);
 
 impl Snapshot {
     /// Iterate through all devices described by the snapshot
-    pub fn iter<'a>(&'a mut self) -> SnapshotIter<'a> {
+    pub fn iter(&mut self) -> SnapshotIter {
         SnapshotIter(self)
     }
 
@@ -424,7 +426,7 @@ impl<'a> Statistics<'a> {
     /// acquired.
     pub fn queue_length(&self) -> u32 {
         let cur = unsafe {self.current.devstat.as_ref() };
-        return cur.start_count - cur.end_count
+        cur.start_count - cur.end_count
     }
 
     fields!{self, total_bytes, total_bytes}
