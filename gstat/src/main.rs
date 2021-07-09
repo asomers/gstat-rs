@@ -121,7 +121,7 @@ impl Element {
         let busy_cell = Cell::from(format!("{:>6.1}", self.pct_busy))
             .style(Style::default().fg(color));
 
-        Row::new([
+        Row::new(vec![
             Cell::from(format!("{:>4}", self.qd)),
             Cell::from(format!("{:>6.0}", self.ops_s)),
             Cell::from(format!("{:>6.0}", self.r_s)),
