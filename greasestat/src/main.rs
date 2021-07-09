@@ -51,7 +51,6 @@ struct Cli {
     #[argh(switch, short = 's')]
     size: bool,
     /// display update interval, in microseconds or with the specified unit
-    /// (unimplemented)
     #[argh(option, short = 'I', default = "String::from(\"1s\")")]
     interval: String,
     /// only display physical providers (those with rank of 1). (unimplemented)
@@ -189,7 +188,12 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let cli: Cli = argh::from_env();
+    let mut cli: Cli = argh::from_env();
+    if cli.interval.parse::<i32>().is_ok() {
+        // Add the default units
+        cli.interval.push_str("us");
+    }
+    let tick_rate: Duration = humanize_rs::duration::parse(&cli.interval)?;
 
     // Terminal initialization
     let backend = RustboxBackend::new()?;
@@ -199,8 +203,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-
-    let tick_rate = Duration::from_millis(500);
 
     // Input
     loop {
