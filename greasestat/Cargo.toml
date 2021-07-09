@@ -7,6 +7,5 @@ edition = "2018"
 
 [dependencies]
 freebsd-libgeom = { path = "../freebsd-libgeom" }
-termion = "1.5"
-tui = { version = "0.15.0", features = ["termion"] }
-
+rustbox = "0.11"
+tui = { version = "0.15.0", features = ["rustbox"] }

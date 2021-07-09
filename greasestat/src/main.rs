@@ -1,21 +1,16 @@
-#[allow(dead_code)]
-mod util;
-
-use crate::util::event::{Event, Events};
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
+use rustbox::{
+    Event,
+    keyboard::Key
+};
 use std::{
     error::Error,
     io,
-    mem
-};
-use termion::{
-    event::Key,
-    input::MouseTerminal,
-    raw::IntoRawMode,
-    screen::AlternateScreen
+    mem,
+    time::Duration
 };
 use tui::{
-    backend::TermionBackend,
+    backend::RustboxBackend,
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     widgets::{Block, Cell, Row, Table, TableState},
@@ -153,18 +148,15 @@ impl StatefulTable {
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Terminal initialization
-    let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    let backend = RustboxBackend::new()?;
     let mut terminal = Terminal::new(backend)?;
-
-    let events = Events::new();
 
     let mut table = StatefulTable::new()?;
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+
+    let tick_rate = Duration::from_millis(500);
 
     // Input
     loop {
@@ -202,22 +194,31 @@ fn main() -> Result<(), Box<dyn Error>> {
             f.render_stateful_widget(t, rects[0], &mut table.state);
         }).unwrap();
 
-        if let Event::Input(key) = events.next().unwrap() {
-            match key {
-                Key::Char('q') => {
-                    break;
+        match terminal.backend().rustbox().peek_event(tick_rate, false) {
+            Ok(Event::KeyEvent(key)) => {
+                match key {
+                    Key::Char('q') => {
+                        break;
+                    }
+                    Key::Down => {
+                        table.next();
+                    }
+                    Key::Up => {
+                        table.previous();
+                    }
+                    _ => {}
                 }
-                Key::Down => {
-                    table.next();
-                }
-                Key::Up => {
-                    table.previous();
-                }
-                _ => {}
+            },
+            Ok(Event::NoEvent) => {
+                // Timer tick.
+                table.refresh()?;
+            },
+            Ok(Event::ResizeEvent(_, _)) => {
+                // Window resize
+            },
+            e => {
+                panic!("Unhandled event {:?}", e);
             }
-        } else {
-            // Timer tick.
-            table.refresh()?;
         };
     }
 
