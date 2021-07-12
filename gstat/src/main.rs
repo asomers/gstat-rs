@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 mod util;
 
 use crate::util::event::{Event, Events};
@@ -262,7 +261,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let events = Events::new();
+    let stdin = io::stdin();
+    let mut events = Events::new(stdin);
 
     let mut table = StatefulTable::new()?;
 
@@ -321,8 +321,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }).unwrap();
 
-        match events.next() {
-            Ok(Event::Input(key)) => {
+        match events.poll(&tick_rate) {
+            Some(Event::Tick) => {
+                table.refresh()?;
+            }
+            Some(Event::Key(key)) => {
                 if editting_regex {
                     match key {
                         Key::Char('\n') => {
@@ -374,12 +377,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::Tick) => {
-                table.refresh()?;
-            },
-            e => {
-                panic!("Unhandled event {:?}", e);
+            Some(Event::Mouse(_mev)) => {
+                // ignore for now
             }
+            None => {
+                // stdin closed for some reason
+                break;
+            },
         };
     }
 
