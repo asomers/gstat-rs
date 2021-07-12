@@ -86,7 +86,7 @@ struct Cli {
     /// display statistics for other (BIO_FLUSH) operations.
     #[options(short = 'o')]
     other: bool,
-    /// display block size statistics (unimplemented)
+    /// display block size statistics
     #[options(short = 's')]
     size: bool,
     /// display update interval, in microseconds or with the specified unit
@@ -282,18 +282,24 @@ impl StatefulTable {
                                 Field::Float(stats.transfers_per_second()));
                     elem.insert("   r/s", Field::Float(
                         stats.transfers_per_second_read()));
+                    elem.insert("kB/r", Field::Float(
+                        stats.kb_per_transfer_read()));
                     elem.insert("kB/s r", Field::Float(
                         stats.mb_per_second_read() * 1024.0));
                     elem.insert("  ms/r", Field::Float(
                         stats.ms_per_transaction_read()));
                     elem.insert("   w/s", Field::Float(
                         stats.transfers_per_second_write()));
+                    elem.insert("kB/w", Field::Float(
+                        stats.kb_per_transfer_write()));
                     elem.insert("kB/s w", Field::Float(
                         stats.mb_per_second_write() * 1024.0));
                     elem.insert("  ms/w", Field::Float(
                         stats.ms_per_transaction_write()));
                     elem.insert("   d/s", Field::Float(
                         stats.transfers_per_second_free()));
+                    elem.insert("kB/d", Field::Float(
+                        stats.kb_per_transfer_free()));
                     elem.insert("kB/s d", Field::Float(
                         stats.mb_per_second_free() * 1024.0));
                     elem.insert("  ms/d", Field::Float(
@@ -312,6 +318,26 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    const _COL_QD: usize = 0;
+    const _COL_OPS_S: usize = 1;
+    const _COL_R_S: usize = 2;
+    const COL_KB_R: usize = 3;
+    const _COL_KBS_R: usize = 4;
+    const _COL_MS_R: usize = 5;
+    const _COL_W_S: usize = 6;
+    const COL_KB_W: usize = 7;
+    const _COL_KBS_W: usize = 8;
+    const _COL_MS_W: usize = 9;
+    const COL_D_S: usize = 10;
+    const COL_KB_D: usize = 11;
+    const COL_KBS_D: usize = 12;
+    const COL_MS_D: usize = 13;
+    const _COL_O_S: usize = 14;
+    const _COL_MS_O: usize = 15;
+    const _COL_PCT_BUSY: usize = 16;
+    const _COL_NAME: usize = 17;
+    const _COL_MAX: usize = 18;
+
     let mut cli: Cli = Cli::parse_args_default_or_exit();
     let mut filter = cli.filter.as_ref().map(|s| Regex::new(s).unwrap());
     let mut tick_rate: Duration = match cli.interval.as_mut() {
@@ -344,18 +370,24 @@ fn main() -> Result<(), Box<dyn Error>> {
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("   r/s", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/r", cli.size, Constraint::Length(5),
+            |f| format!("{:>4.0}", f.as_float())),
         Column::new("kB/s r", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/r", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
         Column::new("   w/s", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/w", cli.size, Constraint::Length(5),
+            |f| format!("{:>4.0}", f.as_float())),
         Column::new("kB/s w", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/w", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
         Column::new("   d/s", cli.delete, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/d", cli.size && cli.delete, Constraint::Length(5),
+            |f| format!("{:>4.0}", f.as_float())),
         Column::new("kB/s d", cli.delete, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/d", cli.delete, Constraint::Length(7),
@@ -456,12 +488,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                             cli.auto ^= true;
                         }
                         Key::Char('d') => {
-                            for col in columns.iter_mut() {
-                                let delcols = ["   d/s", "kB/s d", "  ms/d"];
-                                if delcols.contains(&col.header)  {
-                                    col.enabled ^= true;
-                                }
-                            }
+                            cli.delete ^= true;
+                            columns[COL_D_S].enabled = cli.delete;
+                            columns[COL_KB_D].enabled = cli.delete && cli.size;
+                            columns[COL_KBS_D].enabled = cli.delete;
+                            columns[COL_MS_D].enabled = cli.delete;
                         }
                         Key::Char('o') => {
                             for col in columns.iter_mut() {
@@ -473,6 +504,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Char('p') => {
                             cli.physical ^= true;
+                        }
+                        Key::Char('s') => {
+                            cli.size ^= true;
+                            columns[COL_KB_R].enabled = cli.size;
+                            columns[COL_KB_W].enabled = cli.size;
+                            columns[COL_KB_D].enabled = cli.delete && cli.size;
                         }
                         Key::Char('F') => {
                             filter = None;

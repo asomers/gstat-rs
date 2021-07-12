@@ -15,8 +15,6 @@ disks.  The key differences are:
   future.
 * gstat-rs does not display GEOM consumers (`-c`), but it can easily be
   added if there's any demand for that feature.
-* gstat-rs does not yet support the `-d`, `-o`, and `-s` flags, but shortly
-  will.
 
 # Minimum Supported Rust Version (MSRV)
 
