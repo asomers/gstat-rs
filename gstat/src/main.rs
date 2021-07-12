@@ -77,7 +77,7 @@ struct Cli {
     /// output in CSV.  Implies endless batch mode. (unimplemented)
     #[options(short = 'C')]
     csv: bool,
-    /// display statistics for delete (BIO_DELETE) operations. (unimplemented)
+    /// display statistics for delete (BIO_DELETE) operations.
     #[options(short = 'd')]
     delete: bool,
     /// only display devices with names matching filter, as a regex.
@@ -173,6 +173,7 @@ impl Element {
         };
 
         let cells = columns.iter()
+            .filter(|col| col.enabled)
             .map(|col| {
                 let style = Style::default();
                 let style = if col.header == " %busy" {
@@ -291,6 +292,12 @@ impl StatefulTable {
                         stats.mb_per_second_write() * 1024.0));
                     elem.insert("  ms/w", Field::Float(
                         stats.ms_per_transaction_write()));
+                    elem.insert("   d/s", Field::Float(
+                        stats.transfers_per_second_free()));
+                    elem.insert("kB/s d", Field::Float(
+                        stats.mb_per_second_free() * 1024.0));
+                    elem.insert("  ms/d", Field::Float(
+                        stats.ms_per_transaction_free()));
                     elem.insert(" %busy", Field::Float(stats.busy_pct()));
                     self.data.items.push(elem);
                 }
@@ -326,7 +333,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let columns = [
+    let mut columns = [
         Column::new("L(q)", true, Constraint::Length(5),
             |f| format!("{:>4}", f.as_int())),
         Column::new(" ops/s", true, Constraint::Length(7),
@@ -342,6 +349,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         Column::new("kB/s w", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/w", true, Constraint::Length(7),
+            |f| format!("{:>6.1}", f.as_float())),
+        Column::new("   d/s", cli.delete, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/s d", cli.delete, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("  ms/d", cli.delete, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
         Column::new(" %busy", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
@@ -433,6 +446,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Char('a') => {
                             cli.auto ^= true;
+                        }
+                        Key::Char('d') => {
+                            for col in columns.iter_mut() {
+                                let delcols = ["   d/s", "kB/s d", "  ms/d"];
+                                if delcols.contains(&col.header)  {
+                                    col.enabled ^= true;
+                                }
+                            }
                         }
                         Key::Char('p') => {
                             cli.physical ^= true;
