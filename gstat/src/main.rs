@@ -83,7 +83,7 @@ struct Cli {
     /// only display devices with names matching filter, as a regex.
     #[options(short = 'f')]
     filter: Option<String>,
-    /// display statistics for other (BIO_FLUSH) operations. (unimplemented)
+    /// display statistics for other (BIO_FLUSH) operations.
     #[options(short = 'o')]
     other: bool,
     /// display block size statistics (unimplemented)
@@ -298,6 +298,10 @@ impl StatefulTable {
                         stats.mb_per_second_free() * 1024.0));
                     elem.insert("  ms/d", Field::Float(
                         stats.ms_per_transaction_free()));
+                    elem.insert("   o/s", Field::Float(
+                        stats.transfers_per_second_other()));
+                    elem.insert("  ms/o", Field::Float(
+                        stats.ms_per_transaction_other()));
                     elem.insert(" %busy", Field::Float(stats.busy_pct()));
                     self.data.items.push(elem);
                 }
@@ -355,6 +359,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         Column::new("kB/s d", cli.delete, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/d", cli.delete, Constraint::Length(7),
+            |f| format!("{:>6.1}", f.as_float())),
+        Column::new("   o/s", cli.other, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("  ms/o", cli.other, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
         Column::new(" %busy", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
@@ -451,6 +459,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                             for col in columns.iter_mut() {
                                 let delcols = ["   d/s", "kB/s d", "  ms/d"];
                                 if delcols.contains(&col.header)  {
+                                    col.enabled ^= true;
+                                }
+                            }
+                        }
+                        Key::Char('o') => {
+                            for col in columns.iter_mut() {
+                                let flushcols = ["   o/s", "  ms/o"];
+                                if flushcols.contains(&col.header)  {
                                     col.enabled ^= true;
                                 }
                             }
