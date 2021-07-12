@@ -1,19 +1,24 @@
+mod util;
+
+use crate::util::event::{Event, Events};
 use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
-use rustbox::{
-    Event,
-    keyboard::Key
-};
 use std::{
     error::Error,
     io,
     mem,
     time::Duration
 };
+use termion::{
+    event::Key,
+    input::MouseTerminal,
+    raw::IntoRawMode,
+    screen::AlternateScreen
+};
 use tui::{
-    backend::RustboxBackend,
+    backend::TermionBackend,
     layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
@@ -250,8 +255,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut new_regex = String::new();
 
     // Terminal initialization
-    let backend = RustboxBackend::new()?;
+    let stdout = io::stdout().into_raw_mode()?;
+    let stdout = MouseTerminal::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+
+    let stdin = io::stdin();
+    let mut events = Events::new(stdin);
 
     let mut table = StatefulTable::new()?;
 
@@ -310,11 +321,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }).unwrap();
 
-        match terminal.backend().rustbox().peek_event(tick_rate, false) {
-            Ok(Event::KeyEvent(key)) => {
+        match events.poll(&tick_rate) {
+            Some(Event::Tick) => {
+                table.refresh()?;
+            }
+            Some(Event::Key(key)) => {
                 if editting_regex {
                     match key {
-                        Key::Enter => {
+                        Key::Char('\n') => {
                             editting_regex = false;
                             filter = Some(Regex::new(&new_regex)?);
                         }
@@ -363,16 +377,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             },
-            Ok(Event::NoEvent) => {
-                // Timer tick.
-                table.refresh()?;
-            },
-            Ok(Event::ResizeEvent(_, _)) => {
-                // Window resize
-            },
-            e => {
-                panic!("Unhandled event {:?}", e);
+            Some(Event::Mouse(_mev)) => {
+                // ignore for now
             }
+            None => {
+                // stdin closed for some reason
+                break;
+            },
         };
     }
 
