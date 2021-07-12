@@ -6,9 +6,11 @@ use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
 use std::{
+    collections::hash_map::HashMap,
     error::Error,
     io,
     mem,
+    ops::Index,
     time::Duration
 };
 use termion::{
@@ -95,49 +97,101 @@ struct Cli {
     physical: bool
 }
 
+struct Column {
+    header: &'static str,
+    enabled: bool,
+    format: fn(&Field) -> String,
+    width: Constraint
+}
+
+impl Column {
+    fn new(
+        header: &'static str,
+        enabled: bool,
+        width: Constraint,
+        format: fn(&Field) -> String
+    ) -> Self
+    {
+        Column {header, enabled, format, width}
+    }
+}
+
+/// The value of one metric of one geom
+#[derive(Clone, Debug)]
+enum Field {
+    Int(u32),
+    Float(f64),
+    Str(String)
+}
+
+impl Field {
+    fn as_int(&self) -> u32 {
+        match self {
+            Field::Int(x) => *x,
+            _ => panic!("not an int")
+        }
+    }
+
+    fn as_float(&self) -> f64 {
+        match self {
+            Field::Float(x) => *x,
+            _ => panic!("not an float")
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Field::Str(x) => x,
+            _ => panic!("not a string")
+        }
+    }
+}
+
 /// The data for one element in the table, usually a Geom provider
-#[derive(Debug, Default)]
-struct Element {
-    qd: u32,
-    ops_s: f64,
-    r_s: f64,
-    kbps_r: f64,
-    ms_r: f64,
-    w_s: f64,
-    kbps_w: f64,
-    ms_w: f64,
-    pct_busy: f64,
-    name: String,
-    rank: u32,
+#[derive(Clone, Debug, Default)]
+struct Element{
+    fields: HashMap<&'static str, Field>,
+    rank: u32
 }
 
 impl Element {
-    fn row(&self) -> Row {
+    fn insert(&mut self, k: &'static str, v: Field) -> Option<Field> {
+        self.fields.insert(k, v)
+    }
+
+    fn row(&self, columns: &[Column]) -> Row {
         const BUSY_HIGH_THRESH: f64 = 80.0;
         const BUSY_MEDIUM_THRESH: f64 = 50.0;
 
-        let color = if self.pct_busy > BUSY_HIGH_THRESH {
+        let pct_busy = self[" %busy"].as_float();
+        let color = if pct_busy > BUSY_HIGH_THRESH {
             Color::Red
-        } else if self.pct_busy > BUSY_MEDIUM_THRESH {
+        } else if pct_busy > BUSY_MEDIUM_THRESH {
             Color::Magenta
         } else {
             Color::Green
         };
-        let busy_cell = Cell::from(format!("{:>6.1}", self.pct_busy))
-            .style(Style::default().fg(color));
 
-        Row::new(vec![
-            Cell::from(format!("{:>4}", self.qd)),
-            Cell::from(format!("{:>6.0}", self.ops_s)),
-            Cell::from(format!("{:>6.0}", self.r_s)),
-            Cell::from(format!("{:>6.0}", self.kbps_r)),
-            Cell::from(format!("{:>6.1}", self.ms_r)),
-            Cell::from(format!("{:>6.0}", self.w_s)),
-            Cell::from(format!("{:>6.0}", self.kbps_w)),
-            Cell::from(format!("{:>6.1}", self.ms_w)),
-            busy_cell,
-            Cell::from(self.name.as_str()),
-        ])
+        let cells = columns.iter()
+            .map(|col| {
+                let style = Style::default();
+                let style = if col.header == " %busy" {
+                    style.fg(color)
+                } else {
+                    style
+                };
+                Cell::from((col.format)(&self.fields[col.header]))
+                    .style(style)
+            }).collect::<Vec<_>>();
+        Row::new(cells)
+    }
+}
+
+impl Index<&'static str> for Element {
+    type Output = Field;
+
+    fn index(&self, key: &'static str) -> &Self::Output {
+        &self.fields[key]
     }
 }
 
@@ -218,19 +272,27 @@ impl StatefulTable {
             if let Some(gident) = self.tree.lookup(curstat.id()) {
                 if let Some(rank) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
-                    self.data.items.push(Element{
-                        name: gident.name().to_string_lossy().to_string(),
-                        rank,
-                        qd: stats.queue_length(),
-                        ops_s: stats.transfers_per_second(),
-                        r_s: stats.transfers_per_second_read(),
-                        kbps_r: stats.mb_per_second_read() * 1024.0,
-                        ms_r: stats.ms_per_transaction_read(),
-                        w_s: stats.transfers_per_second_write(),
-                        kbps_w: stats.mb_per_second_write() * 1024.0,
-                        ms_w: stats.ms_per_transaction_write(),
-                        pct_busy: stats.busy_pct()
-                    });
+                    let mut elem = Element::default();
+                    elem.insert("Name", Field::Str(
+                        gident.name().to_string_lossy().to_string()));
+                    elem.insert("L(q)", Field::Int(stats.queue_length()));
+                    elem.rank = rank;
+                    elem.insert(" ops/s",
+                                Field::Float(stats.transfers_per_second()));
+                    elem.insert("   r/s", Field::Float(
+                        stats.transfers_per_second_read()));
+                    elem.insert("kB/s r", Field::Float(
+                        stats.mb_per_second_read() * 1024.0));
+                    elem.insert("  ms/r", Field::Float(
+                        stats.ms_per_transaction_read()));
+                    elem.insert("   w/s", Field::Float(
+                        stats.transfers_per_second_write()));
+                    elem.insert("kB/s w", Field::Float(
+                        stats.mb_per_second_write() * 1024.0));
+                    elem.insert("  ms/w", Field::Float(
+                        stats.ms_per_transaction_write()));
+                    elem.insert(" %busy", Field::Float(stats.busy_pct()));
+                    self.data.items.push(elem);
                 }
             }
         }
@@ -264,6 +326,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
+    let columns = [
+        Column::new("L(q)", true, Constraint::Length(5),
+            |f| format!("{:>4}", f.as_int())),
+        Column::new(" ops/s", true, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("   r/s", true, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/s r", true, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("  ms/r", true, Constraint::Length(7),
+            |f| format!("{:>6.1}", f.as_float())),
+        Column::new("   w/s", true, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("kB/s w", true, Constraint::Length(7),
+            |f| format!("{:>6.0}", f.as_float())),
+        Column::new("  ms/w", true, Constraint::Length(7),
+            |f| format!("{:>6.1}", f.as_float())),
+        Column::new(" %busy", true, Constraint::Length(7),
+            |f| format!("{:>6.1}", f.as_float())),
+        Column::new("Name", true, Constraint::Min(10),
+            |f| f.as_str().to_string()),
+    ];
     let mut table = StatefulTable::new()?;
 
     let normal_style = Style::default().bg(Color::Blue);
@@ -275,37 +359,33 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let header_cells = ["L(q)", " ops/s", "   r/s", "  kBps", "  ms/r",
-                "   w/s", "  kBps", "  ms/w", " %busy", "Name"]
-                .iter()
-                .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
+            let header_cells = columns.iter()
+                .filter(|col| col.enabled)
+                .map(|col|
+                    Cell::from(col.header)
+                    .style(Style::default().fg(Color::Red))
+                );
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter()
-                .filter(|item| !cli.auto || item.pct_busy > 0.1)
+                .filter(|item| !cli.auto || item[" %busy"].as_float() > 0.1)
                 .filter(|item| !cli.physical || item.rank == 1)
-                .filter(|item| filter.as_ref().map(|f| f.is_match(&item.name))
+                .filter(|item|
+                        filter.as_ref()
+                        .map(|f| f.is_match(item["Name"].as_str()))
                         .unwrap_or(true)
                 ).map(|item| {
-                    item.row()
+                    item.row(&columns)
                 });
+            let widths = columns.iter()
+                .filter(|col| col.enabled)
+                .map(|col| col.width)
+                .collect::<Vec<_>>();
             let t = Table::new(rows)
                 .header(header)
                 .block(Block::default())
                 .highlight_style(selected_style)
-                .widths(&[
-                    Constraint::Min(5),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(7),
-                    Constraint::Min(10),
-                ])
-                ;
+                .widths(&widths[..]);
             f.render_stateful_widget(t, rects[0], &mut table.state);
 
             if editting_regex {
