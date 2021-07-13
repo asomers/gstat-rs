@@ -81,7 +81,12 @@ struct Cli {
     interval: Option<String>,
     /// only display physical providers (those with rank of 1).
     #[options(short = 'p')]
-    physical: bool
+    physical: bool,
+    /// Reverse the sort
+    #[options(short = 'r')]
+    reverse: bool,
+    /// Sort by the named column.  The name should match the column header.
+    sort: Option<String>
 }
 
 struct Column {
@@ -104,7 +109,7 @@ impl Column {
 }
 
 /// The value of one metric of one geom
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Field {
     Int(u32),
     Float(f64),
@@ -197,7 +202,9 @@ pub struct StatefulTable {
 }
 
 impl StatefulTable {
-    fn new() -> io::Result<StatefulTable> {
+    fn new(sort_key: Option<&'static str>, reverse: bool)
+        -> io::Result<StatefulTable>
+    {
         let tree = Tree::new()?;
         let prev = None;
         // XXX difference from gstat: the first display will show stats since
@@ -210,7 +217,7 @@ impl StatefulTable {
             state: TableState::default(),
             data: DataSource::default(),
         };
-        table.regen()?;
+        table.regen(sort_key, reverse)?;
         Ok(table)
     }
     pub fn next(&mut self) {
@@ -241,14 +248,18 @@ impl StatefulTable {
         self.state.select(Some(i));
     }
 
-    pub fn refresh(&mut self) -> io::Result<()> {
+    pub fn refresh(&mut self, sort_key: Option<&'static str>, reverse: bool)
+        -> io::Result<()>
+    {
         self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
-        self.regen()?;
+        self.regen(sort_key, reverse)?;
         Ok(())
     }
 
     /// Regenerate the DataSource
-    fn regen(&mut self) -> io::Result<()> {
+    fn regen(&mut self, sort_key: Option<&'static str>, reverse: bool)
+        -> io::Result<()>
+    {
         let etime = if let Some(prev) = self.prev.as_mut() {
             f64::from(self.cur.timestamp() - prev.timestamp())
         } else {
@@ -300,6 +311,15 @@ impl StatefulTable {
                 }
             }
         }
+        if let Some(k) = sort_key {
+            self.data.items.sort_by(|l, r| {
+                if reverse {
+                    r.fields[k].partial_cmp(&l.fields[k])
+                } else {
+                    l.fields[k].partial_cmp(&r.fields[k])
+                }.unwrap()
+            });
+        }
         Ok(())
     }
 }
@@ -340,16 +360,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut editting_regex = false;
     let mut new_regex = String::new();
 
-    // Terminal initialization
-    let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let stdin = io::stdin();
-    let mut events = Events::new(stdin);
-
     let mut columns = [
         Column::new("L(q)", true, Constraint::Length(5),
             |f| format!("{:>4}", f.as_int())),
@@ -388,7 +398,26 @@ fn main() -> Result<(), Box<dyn Error>> {
         Column::new("Name", true, Constraint::Min(10),
             |f| f.as_str().to_string()),
     ];
-    let mut table = StatefulTable::new()?;
+
+    let mut sort_idx: Option<usize> = cli.sort.as_ref()
+        .map(|name| columns.iter()
+             .enumerate()
+             .find(|(_i, col)| col.header.trim() == name.trim())
+             .map(|(i, _col)| i)
+        ).flatten();
+
+    // Terminal initialization
+    let stdout = io::stdout().into_raw_mode()?;
+    let stdout = MouseTerminal::from(stdout);
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let stdin = io::stdin();
+    let mut events = Events::new(stdin);
+
+    let sort_key = sort_idx.map(|idx| columns[idx].header);
+    let mut table = StatefulTable::new(sort_key, cli.reverse)?;
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -400,11 +429,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .split(f.size());
 
             let header_cells = columns.iter()
-                .filter(|col| col.enabled)
-                .map(|col|
+                .enumerate()
+                .filter(|(_i, col)| col.enabled)
+                .map(|(i, col)| {
+                    let style = Style::default().fg(Color::Red);
+                    let style = if sort_idx == Some(i) {
+                        style.add_modifier(Modifier::REVERSED)
+                    } else {
+                        style
+                    };
                     Cell::from(col.header)
-                    .style(Style::default().fg(Color::Red))
-                );
+                    .style(style)
+                });
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter()
@@ -443,7 +479,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
-                table.refresh()?;
+                let sort_key = sort_idx.map(|idx| columns[idx].header);
+                table.refresh(sort_key, cli.reverse)?;
             }
             Some(Event::Key(key)) => {
                 if editting_regex {
@@ -489,8 +526,50 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                             }
                         }
+                        Key::Char('-') => {
+                            // Ideally this would be 'O' to mimic top's
+                            // behavior.  But 'o' is already taken in gstat.
+                            loop {
+                                match sort_idx {
+                                    Some(idx) => {
+                                        sort_idx = idx.checked_sub(1);
+                                    }
+                                    None => {
+                                        sort_idx = Some(columns.len() - 1);
+                                    }
+                                }
+                                if sort_idx.is_none() {
+                                    break;
+                                }
+                                if columns[sort_idx.unwrap()].enabled {
+                                    break;
+                                }
+                            }
+                        }
+                        Key::Char('+') => {
+                            // Ideally this would be 'o' to match top's
+                            // behavior.  But 'o' is already taken in gstat.
+                            loop {
+                                match sort_idx {
+                                    Some(idx) => {sort_idx = Some(idx + 1);}
+                                    None => {sort_idx = Some(0);}
+                                }
+                                let idx = sort_idx.unwrap();
+                                if idx >= columns.len() {
+                                    sort_idx = None;
+                                    break;
+                                }
+                                if columns[idx].enabled {
+                                    sort_idx = Some(idx);
+                                    break;
+                                }
+                            }
+                        }
                         Key::Char('p') => {
                             cli.physical ^= true;
+                        }
+                        Key::Char('r') => {
+                            cli.reverse ^= true;
                         }
                         Key::Char('s') => {
                             cli.size ^= true;

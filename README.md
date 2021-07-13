@@ -11,6 +11,10 @@ An enhanced replacement for FreeBSD's gstat(8) utility.
 systems.  `gstat-rs` is designed to work better even on servers with hundreds of
 disks.  The key differences are:
 
+* gstat-rs supports sorting the disks using the '+', '-', and 'r' keys, and the
+  "--sort" and "-r" command line options.
+* gstat-rs can enable/disable optional columns at any time using the '-s',
+  '-d', and '-o' keys.  gstat can only do that at startup.
 * gstat-rs does not support batch mode (`-bBC`) output.  If you want that kind
   of information, use iostat(8) instead.
 * gstat-rs does not display GEOM consumers (`-c`), but it can easily be
