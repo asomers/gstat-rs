@@ -11,8 +11,8 @@ An enhanced replacement for FreeBSD's gstat(8) utility.
 systems.  `gstat-rs` is designed to work better even on servers with hundreds of
 disks.  The key differences are:
 
-* gstat-rs does not support batch mode (`-b`) output, but hopefully will in the
-  future.
+* gstat-rs does not support batch mode (`-bBC`) output.  If you want that kind
+  of information, use iostat(8) instead.
 * gstat-rs does not display GEOM consumers (`-c`), but it can easily be
   added if there's any demand for that feature.
 

@@ -64,19 +64,6 @@ struct Cli {
     /// only display providers that are at least 0.1% busy
     #[options(short = 'a')]
     auto: bool,
-    /// batch mode.  Collect numbers, print and exit. (unimplemented)
-    #[options(short = 'b')]
-    batch: bool,
-    /// endless batch mode.  Same as batch mode, but does not exit after
-    /// collecting the first set of data. (unimplemented)
-    #[options(short = 'B')]
-    endless_batch: bool,
-    /// enable display of geom(4) consumers too. (unimplemented)
-    #[options(short = 'c')]
-    consumers: bool,
-    /// output in CSV.  Implies endless batch mode. (unimplemented)
-    #[options(short = 'C')]
-    csv: bool,
     /// display statistics for delete (BIO_DELETE) operations.
     #[options(short = 'd')]
     delete: bool,
