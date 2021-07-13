@@ -329,41 +329,85 @@ impl Element {
     }
 }
 
-#[derive(Debug, Default)]
 struct DataSource {
-    items: Vec<Element>
-}
-
-pub struct StatefulTable {
     prev: Option<Snapshot>,
     cur: Snapshot,
     tree: Tree,
-    state: TableState,
-    data: DataSource
+    items: Vec<Element>
 }
 
-impl StatefulTable {
-    fn new() -> io::Result<StatefulTable>
-    {
+impl DataSource {
+    fn new() -> io::Result<DataSource> {
         let tree = Tree::new()?;
         let prev = None;
         // XXX difference from gstat: the first display will show stats since
         // boot, like iostat.
         let cur = Snapshot::new()?;
-        let mut table = StatefulTable {
-            prev,
-            cur,
-            tree,
-            state: TableState::default(),
-            data: DataSource::default(),
-        };
-        table.regen()?;
-        Ok(table)
+        let items = Default::default();
+        Ok(
+            DataSource {
+                prev,
+                cur,
+                tree,
+                items
+            }
+        )
     }
+
+    pub fn refresh(&mut self) -> io::Result<()>
+    {
+        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
+        self.regen()?;
+        Ok(())
+    }
+
+    /// Regenerate the data from geom
+    fn regen(&mut self) -> io::Result<()>
+    {
+        let etime = if let Some(prev) = self.prev.as_mut() {
+            f64::from(self.cur.timestamp() - prev.timestamp())
+        } else {
+            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
+            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
+        };
+        self.items.clear();
+        for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
+            if let Some(gident) = self.tree.lookup(curstat.id()) {
+                if let Some(rank) = gident.rank() {
+                    let stats = Statistics::compute(curstat, prevstat, etime);
+                    let elem = Element::new(&gident.name().to_string_lossy(),
+                        rank, &stats);
+                    self.items.push(elem);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn sort(&mut self, sort_idx: Option<usize>, reverse: bool) {
+        if let Some(k) = sort_idx {
+            self.items.sort_by(|l, r| {
+                if reverse {
+                    r.partial_cmp_by(k, l)
+                } else {
+                    l.partial_cmp_by(k, r)
+                }.unwrap()
+            });
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct StatefulTable {
+    state: TableState,
+    len: usize
+}
+
+impl StatefulTable {
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.data.items.len() - 1 {
+                if i >= self.len - 1 {
                     0
                 } else {
                     i + 1
@@ -378,7 +422,7 @@ impl StatefulTable {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.data.items.len() - 1
+                    self.len - 1
                 } else {
                     i - 1
                 }
@@ -388,46 +432,16 @@ impl StatefulTable {
         self.state.select(Some(i));
     }
 
-    pub fn refresh(&mut self) -> io::Result<()>
+    pub fn table<'a>(&mut self, header: Row<'a>, rows: Vec<Row<'a>>, widths: &'a[Constraint])
+        -> Table<'a>
     {
-        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
-        self.regen()?;
-        Ok(())
-    }
-
-    /// Regenerate the DataSource
-    fn regen(&mut self) -> io::Result<()>
-    {
-        let etime = if let Some(prev) = self.prev.as_mut() {
-            f64::from(self.cur.timestamp() - prev.timestamp())
-        } else {
-            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
-            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
-        };
-        self.data.items.clear();
-        for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
-            if let Some(gident) = self.tree.lookup(curstat.id()) {
-                if let Some(rank) = gident.rank() {
-                    let stats = Statistics::compute(curstat, prevstat, etime);
-                    let elem = Element::new(&gident.name().to_string_lossy(),
-                        rank, &stats);
-                    self.data.items.push(elem);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn sort(&mut self, sort_idx: Option<usize>, reverse: bool) {
-        if let Some(k) = sort_idx {
-            self.data.items.sort_by(|l, r| {
-                if reverse {
-                    r.partial_cmp_by(k, l)
-                } else {
-                    l.partial_cmp_by(k, r)
-                }.unwrap()
-            });
-        }
+        let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+        self.len = rows.len();
+        Table::new(rows)
+            .header(header)
+            .block(Block::default())
+            .highlight_style(selected_style)
+            .widths(widths)
     }
 }
 
@@ -473,11 +487,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let mut table = StatefulTable::new()?;
-    table.sort(sort_idx, cfg.reverse);
+    let mut data = DataSource::new()?;
+    let mut table = StatefulTable::default();
+    data.sort(sort_idx, cfg.reverse);
 
     let normal_style = Style::default().bg(Color::Blue);
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
     loop {
         terminal.draw(|f| {
@@ -500,7 +514,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 });
             let header = Row::new(header_cells)
                 .style(normal_style);
-            let rows = table.data.items.iter()
+            let rows = data.items.iter()
                 .filter(|elem| !cfg.auto || elem.pct_busy > 0.1)
                 .filter(|elem| !cfg.physical || elem.rank == 1)
                 .filter(|elem|
@@ -509,16 +523,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .unwrap_or(true)
                 ).map(|elem| {
                     elem.row(&columns)
-                });
+                }).collect::<Vec<_>>();
             let widths = columns.cols.iter()
                 .filter(|col| col.enabled)
                 .map(|col| col.width)
                 .collect::<Vec<_>>();
-            let t = Table::new(rows)
-                .header(header)
-                .block(Block::default())
-                .highlight_style(selected_style)
-                .widths(&widths[..]);
+            let t = table.table(header, rows, &widths);
             f.render_stateful_widget(t, rects[0], &mut table.state);
 
             if editting_regex {
@@ -537,8 +547,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
                 if !paused {
-                    table.refresh()?;
-                    table.sort(sort_idx, cfg.reverse);
+                    data.refresh()?;
+                    data.sort(sort_idx, cfg.reverse);
                 }
             }
             Some(Event::Key(key)) => {
@@ -566,8 +576,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                             paused ^= true;
                             if !paused {
                                 // Refresh immediately after unpause.
-                                table.refresh()?;
-                                table.sort(sort_idx, cfg.reverse);
+                                data.refresh()?;
+                                data.sort(sort_idx, cfg.reverse);
                             }
                         }
                         Key::Char('<') => {
@@ -617,7 +627,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             let sort_key = sort_idx
                                 .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_idx, cfg.reverse);
+                            data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('+') => {
                             // Ideally this would be 'o' to match top's
@@ -640,14 +650,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                             let sort_key = sort_idx
                                 .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_idx, cfg.reverse);
+                            data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('p') => {
                             cfg.physical ^= true;
                         }
                         Key::Char('r') => {
                             cfg.reverse ^= true;
-                            table.sort(sort_idx, cfg.reverse);
+                            data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('s') => {
                             cfg.size ^= true;
