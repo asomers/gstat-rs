@@ -202,8 +202,7 @@ pub struct StatefulTable {
 }
 
 impl StatefulTable {
-    fn new(sort_key: Option<&'static str>, reverse: bool)
-        -> io::Result<StatefulTable>
+    fn new() -> io::Result<StatefulTable>
     {
         let tree = Tree::new()?;
         let prev = None;
@@ -217,7 +216,7 @@ impl StatefulTable {
             state: TableState::default(),
             data: DataSource::default(),
         };
-        table.regen(sort_key, reverse)?;
+        table.regen()?;
         Ok(table)
     }
     pub fn next(&mut self) {
@@ -248,17 +247,15 @@ impl StatefulTable {
         self.state.select(Some(i));
     }
 
-    pub fn refresh(&mut self, sort_key: Option<&'static str>, reverse: bool)
-        -> io::Result<()>
+    pub fn refresh(&mut self) -> io::Result<()>
     {
         self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
-        self.regen(sort_key, reverse)?;
+        self.regen()?;
         Ok(())
     }
 
     /// Regenerate the DataSource
-    fn regen(&mut self, sort_key: Option<&'static str>, reverse: bool)
-        -> io::Result<()>
+    fn regen(&mut self) -> io::Result<()>
     {
         let etime = if let Some(prev) = self.prev.as_mut() {
             f64::from(self.cur.timestamp() - prev.timestamp())
@@ -311,6 +308,10 @@ impl StatefulTable {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn sort(&mut self, sort_key: Option<&'static str>, reverse: bool) {
         if let Some(k) = sort_key {
             self.data.items.sort_by(|l, r| {
                 if reverse {
@@ -320,7 +321,6 @@ impl StatefulTable {
                 }.unwrap()
             });
         }
-        Ok(())
     }
 }
 
@@ -416,8 +416,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let sort_key = sort_idx.map(|idx| columns[idx].header);
-    let mut table = StatefulTable::new(sort_key, cli.reverse)?;
+    let mut sort_key = sort_idx.map(|idx| columns[idx].header);
+    let mut table = StatefulTable::new()?;
+    table.sort(sort_key, cli.reverse);
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -479,8 +480,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
-                let sort_key = sort_idx.map(|idx| columns[idx].header);
-                table.refresh(sort_key, cli.reverse)?;
+                table.refresh()?;
+                table.sort(sort_key, cli.reverse);
             }
             Some(Event::Key(key)) => {
                 if editting_regex {
@@ -545,6 +546,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     break;
                                 }
                             }
+                            sort_key = sort_idx
+                                .map(|idx| columns[idx].header);
+                            table.sort(sort_key, cli.reverse);
                         }
                         Key::Char('+') => {
                             // Ideally this would be 'o' to match top's
@@ -564,12 +568,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     break;
                                 }
                             }
+                            sort_key = sort_idx
+                                .map(|idx| columns[idx].header);
+                            table.sort(sort_key, cli.reverse);
                         }
                         Key::Char('p') => {
                             cli.physical ^= true;
                         }
                         Key::Char('r') => {
                             cli.reverse ^= true;
+                            table.sort(sort_key, cli.reverse);
                         }
                         Key::Char('s') => {
                             cli.size ^= true;
