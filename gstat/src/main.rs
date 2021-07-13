@@ -1,6 +1,9 @@
 mod util;
 
-use crate::util::event::{Event, Events};
+use crate::util::{
+    event::{Event, Events},
+    iter::IteratorExt
+};
 use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
@@ -11,6 +14,7 @@ use std::{
     error::Error,
     io,
     mem,
+    num::NonZeroU16,
     ops::BitOrAssign,
     time::Duration
 };
@@ -127,6 +131,14 @@ impl Column {
     ) -> Self
     {
         Column {header, enabled, width}
+    }
+
+    fn min_width(&self) -> u16 {
+        match self.width {
+            Constraint::Min(x) => x,
+            Constraint::Length(x) => x,
+            _ => unreachable!("gstat-rs doesn't create columns like this")
+        }
     }
 }
 
@@ -495,10 +507,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         terminal.draw(|f| {
-            let rects = Layout::default()
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .split(f.size());
-
             let header_cells = columns.cols.iter()
                 .enumerate()
                 .filter(|(_i, col)| col.enabled)
@@ -514,7 +522,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                 });
             let header = Row::new(header_cells)
                 .style(normal_style);
-            let rows = data.items.iter()
+            let widths = columns.cols.iter()
+                .filter(|col| col.enabled)
+                .map(|col| col.width)
+                .collect::<Vec<_>>();
+            let twidth: u16 = columns.cols.iter()
+                .filter(|col| col.enabled)
+                .map(|col| col.min_width())
+                .sum();
+            let ntables = NonZeroU16::new(f.size().width / twidth)
+                .unwrap_or_else(|| NonZeroU16::new(1).unwrap());
+            let rects = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    (0..ntables.into())
+                    .map(|_| Constraint::Percentage(100 / u16::from(ntables)))
+                    .collect::<Vec<_>>()
+                ).split(f.size());
+            let multirows = data.items.iter()
                 .filter(|elem| !cfg.auto || elem.pct_busy > 0.1)
                 .filter(|elem| !cfg.physical || elem.rank == 1)
                 .filter(|elem|
@@ -523,13 +548,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .unwrap_or(true)
                 ).map(|elem| {
                     elem.row(&columns)
-                }).collect::<Vec<_>>();
-            let widths = columns.cols.iter()
-                .filter(|col| col.enabled)
-                .map(|col| col.width)
-                .collect::<Vec<_>>();
-            let t = table.table(header, rows, &widths);
-            f.render_stateful_widget(t, rects[0], &mut table.state);
+                }).deinterleave::<Vec<_>>(ntables.into());
+            for (i, rows) in multirows.into_iter().enumerate() {
+                let t = table.table(header.clone(), rows, &widths);
+                f.render_stateful_widget(t, rects[i], &mut table.state);
+            }
 
             if editting_regex {
                 let area = popup_layout(60, f.size());
