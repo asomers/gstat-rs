@@ -83,6 +83,9 @@ struct Cli {
     /// only display physical providers (those with rank of 1).
     #[options(short = 'p')]
     physical: bool,
+    /// Reset the config file
+    #[serde(skip)]
+    reset_config: bool,
     /// Reverse the sort
     #[options(short = 'r')]
     reverse: bool,
@@ -362,9 +365,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     const _COL_NAME: usize = 17;
     const _COL_MAX: usize = 18;
 
-    let mut cfg: Cli = confy::load("gstat-rs")?;
     let cli: Cli = Cli::parse_args_default_or_exit();
-    cfg |= cli;
+    let mut cfg: Cli = confy::load("gstat-rs")?;
+    if cli.reset_config {
+        cfg = cli;
+    } else {
+        cfg |= cli;
+    }
     let mut filter = cfg.filter.as_ref().map(|s| Regex::new(s).unwrap());
     let mut tick_rate: Duration = match cfg.interval.as_mut() {
         None => Duration::from_secs(1),
