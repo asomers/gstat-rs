@@ -5,12 +5,13 @@ use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
+use serde_derive::{Deserialize, Serialize};
 use std::{
     collections::hash_map::HashMap,
     error::Error,
     io,
     mem,
-    ops::Index,
+    ops::{BitOrAssign, Index},
     time::Duration
 };
 use termion::{
@@ -57,7 +58,7 @@ fn popup_layout(percent_x: u16, r: Rect) -> Rect {
 
 /// Drop-in compatible gstat(8) replacement
 // TODO: shorten the help options so they fit on 80 columns.
-#[derive(Debug, Options)]
+#[derive(Debug, Default, Deserialize, Options, Serialize)]
 struct Cli {
     #[options(help = "print help message")]
     help: bool,
@@ -87,6 +88,22 @@ struct Cli {
     reverse: bool,
     /// Sort by the named column.  The name should match the column header.
     sort: Option<String>
+}
+
+impl BitOrAssign for Cli {
+    #[allow(clippy::or_fun_call)]
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.help |= rhs.help;
+        self.auto |= rhs.auto;
+        self.delete |= rhs.delete;
+        self.filter = rhs.filter.or(self.filter.take());
+        self.other |= rhs.other;
+        self.size |= rhs.size;
+        self.interval = rhs.interval.or(self.interval.take());
+        self.physical |= rhs.physical;
+        self.reverse |= rhs.reverse;
+        self.sort = rhs.sort.or(self.sort.take());
+    }
 }
 
 struct Column {
@@ -345,9 +362,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     const _COL_NAME: usize = 17;
     const _COL_MAX: usize = 18;
 
-    let mut cli: Cli = Cli::parse_args_default_or_exit();
-    let mut filter = cli.filter.as_ref().map(|s| Regex::new(s).unwrap());
-    let mut tick_rate: Duration = match cli.interval.as_mut() {
+    let mut cfg: Cli = confy::load("gstat-rs")?;
+    let cli: Cli = Cli::parse_args_default_or_exit();
+    cfg |= cli;
+    let mut filter = cfg.filter.as_ref().map(|s| Regex::new(s).unwrap());
+    let mut tick_rate: Duration = match cfg.interval.as_mut() {
         None => Duration::from_secs(1),
         Some(s) => {
             if s.parse::<i32>().is_ok() {
@@ -367,7 +386,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("   r/s", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/r", cli.size, Constraint::Length(5),
+        Column::new("kB/r", cfg.size, Constraint::Length(5),
             |f| format!("{:>4.0}", f.as_float())),
         Column::new("kB/s r", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
@@ -375,23 +394,23 @@ fn main() -> Result<(), Box<dyn Error>> {
             |f| format!("{:>6.1}", f.as_float())),
         Column::new("   w/s", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/w", cli.size, Constraint::Length(5),
+        Column::new("kB/w", cfg.size, Constraint::Length(5),
             |f| format!("{:>4.0}", f.as_float())),
         Column::new("kB/s w", true, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
         Column::new("  ms/w", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
-        Column::new("   d/s", cli.delete, Constraint::Length(7),
+        Column::new("   d/s", cfg.delete, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/d", cli.size && cli.delete, Constraint::Length(5),
+        Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5),
             |f| format!("{:>4.0}", f.as_float())),
-        Column::new("kB/s d", cli.delete, Constraint::Length(7),
+        Column::new("kB/s d", cfg.delete, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/d", cli.delete, Constraint::Length(7),
+        Column::new("  ms/d", cfg.delete, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
-        Column::new("   o/s", cli.other, Constraint::Length(7),
+        Column::new("   o/s", cfg.other, Constraint::Length(7),
             |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/o", cli.other, Constraint::Length(7),
+        Column::new("  ms/o", cfg.other, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
         Column::new(" %busy", true, Constraint::Length(7),
             |f| format!("{:>6.1}", f.as_float())),
@@ -399,7 +418,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             |f| f.as_str().to_string()),
     ];
 
-    let mut sort_idx: Option<usize> = cli.sort.as_ref()
+    let mut sort_idx: Option<usize> = cfg.sort.as_ref()
         .map(|name| columns.iter()
              .enumerate()
              .find(|(_i, col)| col.header.trim() == name.trim())
@@ -418,7 +437,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut sort_key = sort_idx.map(|idx| columns[idx].header);
     let mut table = StatefulTable::new()?;
-    table.sort(sort_key, cli.reverse);
+    table.sort(sort_key, cfg.reverse);
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -445,8 +464,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter()
-                .filter(|item| !cli.auto || item[" %busy"].as_float() > 0.1)
-                .filter(|item| !cli.physical || item.rank == 1)
+                .filter(|item| !cfg.auto || item[" %busy"].as_float() > 0.1)
+                .filter(|item| !cfg.physical || item.rank == 1)
                 .filter(|item|
                         filter.as_ref()
                         .map(|f| f.is_match(item["Name"].as_str()))
@@ -481,7 +500,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
                 table.refresh()?;
-                table.sort(sort_key, cli.reverse);
+                table.sort(sort_key, cfg.reverse);
             }
             Some(Event::Key(key)) => {
                 if editting_regex {
@@ -489,6 +508,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Key::Char('\n') => {
                             editting_regex = false;
                             filter = Some(Regex::new(&new_regex)?);
+                            cfg.filter = Some(new_regex.split_off(0));
                         }
                         Key::Char(c) => {
                             new_regex.push(c);
@@ -510,14 +530,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                             tick_rate *= 2;
                         }
                         Key::Char('a') => {
-                            cli.auto ^= true;
+                            cfg.auto ^= true;
                         }
                         Key::Char('d') => {
-                            cli.delete ^= true;
-                            columns[COL_D_S].enabled = cli.delete;
-                            columns[COL_KB_D].enabled = cli.delete && cli.size;
-                            columns[COL_KBS_D].enabled = cli.delete;
-                            columns[COL_MS_D].enabled = cli.delete;
+                            cfg.delete ^= true;
+                            columns[COL_D_S].enabled = cfg.delete;
+                            columns[COL_KB_D].enabled = cfg.delete && cfg.size;
+                            columns[COL_KBS_D].enabled = cfg.delete;
+                            columns[COL_MS_D].enabled = cfg.delete;
                         }
                         Key::Char('o') => {
                             for col in columns.iter_mut() {
@@ -548,7 +568,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             sort_key = sort_idx
                                 .map(|idx| columns[idx].header);
-                            table.sort(sort_key, cli.reverse);
+                            table.sort(sort_key, cfg.reverse);
                         }
                         Key::Char('+') => {
                             // Ideally this would be 'o' to match top's
@@ -570,22 +590,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             sort_key = sort_idx
                                 .map(|idx| columns[idx].header);
-                            table.sort(sort_key, cli.reverse);
+                            table.sort(sort_key, cfg.reverse);
                         }
                         Key::Char('p') => {
-                            cli.physical ^= true;
+                            cfg.physical ^= true;
                         }
                         Key::Char('r') => {
-                            cli.reverse ^= true;
-                            table.sort(sort_key, cli.reverse);
+                            cfg.reverse ^= true;
+                            table.sort(sort_key, cfg.reverse);
                         }
                         Key::Char('s') => {
-                            cli.size ^= true;
-                            columns[COL_KB_R].enabled = cli.size;
-                            columns[COL_KB_W].enabled = cli.size;
-                            columns[COL_KB_D].enabled = cli.delete && cli.size;
+                            cfg.size ^= true;
+                            columns[COL_KB_R].enabled = cfg.size;
+                            columns[COL_KB_W].enabled = cfg.size;
+                            columns[COL_KB_D].enabled = cfg.delete && cfg.size;
                         }
                         Key::Char('F') => {
+                            cfg.filter = None;
                             filter = None;
                         }
                         Key::Char('f') => {
@@ -593,6 +614,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             new_regex = String::new();
                         }
                         Key::Char('q') => {
+                            if let Err(e) = confy::store("gstat-rs", &cfg) {
+                                eprintln!("Warning: failed to save config file: {}", e);
+                            }
                             break;
                         }
                         Key::Down => {

@@ -14,10 +14,13 @@ targets = [
 ]
 
 [dependencies]
+confy = "0.4.0"
 freebsd-libgeom = { version = "=0.1.0", path = "../freebsd-libgeom" }
 gumdrop = "0.8.0"
 humanize-rs = "0.1.5"
 nix = "0.22.0"
 regex = "1"
+serde = "1.0"
+serde_derive = "1.0"
 termion = "1.5"
 tui = { version = "0.15.0", features = ["termion"] }
