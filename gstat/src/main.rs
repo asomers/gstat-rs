@@ -363,8 +363,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     const COL_KB_D: usize = 11;
     const COL_KBS_D: usize = 12;
     const COL_MS_D: usize = 13;
-    const _COL_O_S: usize = 14;
-    const _COL_MS_O: usize = 15;
+    const COL_O_S: usize = 14;
+    const COL_MS_O: usize = 15;
     const _COL_PCT_BUSY: usize = 16;
     const _COL_NAME: usize = 17;
     const _COL_MAX: usize = 18;
@@ -566,12 +566,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             columns[COL_MS_D].enabled = cfg.delete;
                         }
                         Key::Char('o') => {
-                            for col in columns.iter_mut() {
-                                let flushcols = ["   o/s", "  ms/o"];
-                                if flushcols.contains(&col.header)  {
-                                    col.enabled ^= true;
-                                }
-                            }
+                            cfg.other ^= true;
+                            columns[COL_O_S].enabled = cfg.other;
+                            columns[COL_MS_O].enabled = cfg.other;
                         }
                         Key::Char('-') => {
                             // Ideally this would be 'O' to mimic top's
