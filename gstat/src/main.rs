@@ -389,6 +389,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     let mut editting_regex = false;
     let mut new_regex = String::new();
+    let mut paused = false;
 
     let mut columns = [
         Column::new("L(q)", true, Constraint::Length(5),
@@ -510,8 +511,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
-                table.refresh()?;
-                table.sort(sort_key, cfg.reverse);
+                if !paused {
+                    table.refresh()?;
+                    table.sort(sort_key, cfg.reverse);
+                }
             }
             Some(Event::Key(key)) => {
                 if editting_regex {
@@ -534,6 +537,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 } else {
                     match key {
+                        Key::Char(' ') => {
+                            paused ^= true;
+                            if !paused {
+                                // Refresh immediately after unpause.
+                                table.refresh()?;
+                                table.sort(sort_key, cfg.reverse);
+                            }
+                        }
                         Key::Char('<') => {
                             tick_rate /= 2;
                             let s = tick_rate.as_micros().to_string();

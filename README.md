@@ -15,6 +15,7 @@ disks.  The key differences are:
   "--sort" and "-r" command line options.
 * gstat-rs can enable/disable optional columns at any time using the '-s',
   '-d', and '-o' keys.  gstat can only do that at startup.
+* gstat-rs can pause the display without exiting the program.
 * gstat-rs's settings are automatically persisted to a config file.
 * gstat-rs does not support batch mode (`-bBC`) output.  If you want that kind
   of information, use iostat(8) instead.
