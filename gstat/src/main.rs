@@ -79,6 +79,10 @@ struct Cli {
     size: bool,
     /// display update interval, in microseconds or with the specified unit
     #[options(short = 'I')]
+    // Note: argh has a "from_str_fn" property that could be used to create a
+    // custom parser, to parse interval directly to an int or a Duration.  That
+    // would make it easier to save the config file.  But gumpdrop doesn't have
+    // that option.
     interval: Option<String>,
     /// only display physical providers (those with rank of 1).
     #[options(short = 'p')]
@@ -532,9 +536,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     match key {
                         Key::Char('<') => {
                             tick_rate /= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
                         }
                         Key::Char('>') => {
                             tick_rate *= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
                         }
                         Key::Char('a') => {
                             cfg.auto ^= true;
@@ -575,6 +583,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             sort_key = sort_idx
                                 .map(|idx| columns[idx].header);
+                            cfg.sort = sort_key.map(str::to_owned);
                             table.sort(sort_key, cfg.reverse);
                         }
                         Key::Char('+') => {
@@ -597,6 +606,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             sort_key = sort_idx
                                 .map(|idx| columns[idx].header);
+                            cfg.sort = sort_key.map(str::to_owned);
                             table.sort(sort_key, cfg.reverse);
                         }
                         Key::Char('p') => {
