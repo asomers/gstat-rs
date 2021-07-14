@@ -132,6 +132,74 @@ impl Column {
     }
 }
 
+struct Columns {
+    cols: [Column; Columns::MAX]
+}
+
+impl Columns {
+    const _QD: usize = 0;
+    const _OPS_S: usize = 1;
+    const _R_S: usize = 2;
+    const KB_R: usize = 3;
+    const _KBS_R: usize = 4;
+    const _MS_R: usize = 5;
+    const _W_S: usize = 6;
+    const KB_W: usize = 7;
+    const _KBS_W: usize = 8;
+    const _MS_W: usize = 9;
+    const D_S: usize = 10;
+    const KB_D: usize = 11;
+    const KBS_D: usize = 12;
+    const MS_D: usize = 13;
+    const O_S: usize = 14;
+    const MS_O: usize = 15;
+    const PCT_BUSY: usize = 16;
+    const _NAME: usize = 17;
+    const MAX: usize = 18;
+
+    fn new(cfg: &Cli) -> Self {
+        let cols = [
+            Column::new("L(q)", true, Constraint::Length(5),
+                |f| format!("{:>4}", f.as_int())),
+            Column::new(" ops/s", true, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("   r/s", true, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("kB/r", cfg.size, Constraint::Length(5),
+                |f| format!("{:>4.0}", f.as_float())),
+            Column::new("kB/s r", true, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("  ms/r", true, Constraint::Length(7),
+                |f| format!("{:>6.1}", f.as_float())),
+            Column::new("   w/s", true, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("kB/w", cfg.size, Constraint::Length(5),
+                |f| format!("{:>4.0}", f.as_float())),
+            Column::new("kB/s w", true, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("  ms/w", true, Constraint::Length(7),
+                |f| format!("{:>6.1}", f.as_float())),
+            Column::new("   d/s", cfg.delete, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5),
+                |f| format!("{:>4.0}", f.as_float())),
+            Column::new("kB/s d", cfg.delete, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("  ms/d", cfg.delete, Constraint::Length(7),
+                |f| format!("{:>6.1}", f.as_float())),
+            Column::new("   o/s", cfg.other, Constraint::Length(7),
+                |f| format!("{:>6.0}", f.as_float())),
+            Column::new("  ms/o", cfg.other, Constraint::Length(7),
+                |f| format!("{:>6.1}", f.as_float())),
+            Column::new(" %busy", true, Constraint::Length(7),
+                |f| format!("{:>6.1}", f.as_float())),
+            Column::new("Name", true, Constraint::Min(10),
+                |f| f.as_str().to_string()),
+        ];
+        Columns {cols}
+    }
+}
+
 /// The value of one metric of one geom
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Field {
@@ -175,7 +243,7 @@ impl Element {
         self.fields.insert(k, v)
     }
 
-    fn row(&self, columns: &[Column]) -> Row {
+    fn row(&self, columns: &Columns) -> Row {
         const BUSY_HIGH_THRESH: f64 = 80.0;
         const BUSY_MEDIUM_THRESH: f64 = 50.0;
 
@@ -188,11 +256,12 @@ impl Element {
             Color::Green
         };
 
-        let cells = columns.iter()
-            .filter(|col| col.enabled)
-            .map(|col| {
+        let cells = columns.cols.iter()
+            .enumerate()
+            .filter(|(_i, col)| col.enabled)
+            .map(|(i, col)| {
                 let style = Style::default();
-                let style = if col.header == " %busy" {
+                let style = if i == Columns::PCT_BUSY {
                     style.fg(color)
                 } else {
                     style
@@ -349,26 +418,6 @@ impl StatefulTable {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    const _COL_QD: usize = 0;
-    const _COL_OPS_S: usize = 1;
-    const _COL_R_S: usize = 2;
-    const COL_KB_R: usize = 3;
-    const _COL_KBS_R: usize = 4;
-    const _COL_MS_R: usize = 5;
-    const _COL_W_S: usize = 6;
-    const COL_KB_W: usize = 7;
-    const _COL_KBS_W: usize = 8;
-    const _COL_MS_W: usize = 9;
-    const COL_D_S: usize = 10;
-    const COL_KB_D: usize = 11;
-    const COL_KBS_D: usize = 12;
-    const COL_MS_D: usize = 13;
-    const COL_O_S: usize = 14;
-    const COL_MS_O: usize = 15;
-    const _COL_PCT_BUSY: usize = 16;
-    const _COL_NAME: usize = 17;
-    const _COL_MAX: usize = 18;
-
     let cli: Cli = Cli::parse_args_default_or_exit();
     let mut cfg: Cli = confy::load("gstat-rs")?;
     if cli.reset_config {
@@ -391,47 +440,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut new_regex = String::new();
     let mut paused = false;
 
-    let mut columns = [
-        Column::new("L(q)", true, Constraint::Length(5),
-            |f| format!("{:>4}", f.as_int())),
-        Column::new(" ops/s", true, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("   r/s", true, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/r", cfg.size, Constraint::Length(5),
-            |f| format!("{:>4.0}", f.as_float())),
-        Column::new("kB/s r", true, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/r", true, Constraint::Length(7),
-            |f| format!("{:>6.1}", f.as_float())),
-        Column::new("   w/s", true, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/w", cfg.size, Constraint::Length(5),
-            |f| format!("{:>4.0}", f.as_float())),
-        Column::new("kB/s w", true, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/w", true, Constraint::Length(7),
-            |f| format!("{:>6.1}", f.as_float())),
-        Column::new("   d/s", cfg.delete, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5),
-            |f| format!("{:>4.0}", f.as_float())),
-        Column::new("kB/s d", cfg.delete, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/d", cfg.delete, Constraint::Length(7),
-            |f| format!("{:>6.1}", f.as_float())),
-        Column::new("   o/s", cfg.other, Constraint::Length(7),
-            |f| format!("{:>6.0}", f.as_float())),
-        Column::new("  ms/o", cfg.other, Constraint::Length(7),
-            |f| format!("{:>6.1}", f.as_float())),
-        Column::new(" %busy", true, Constraint::Length(7),
-            |f| format!("{:>6.1}", f.as_float())),
-        Column::new("Name", true, Constraint::Min(10),
-            |f| f.as_str().to_string()),
-    ];
+    let mut columns = Columns::new(&cfg);
 
     let mut sort_idx: Option<usize> = cfg.sort.as_ref()
-        .map(|name| columns.iter()
+        .map(|name| columns.cols.iter()
              .enumerate()
              .find(|(_i, col)| col.header.trim() == name.trim())
              .map(|(i, _col)| i)
@@ -447,7 +459,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let mut sort_key = sort_idx.map(|idx| columns[idx].header);
+    let mut sort_key = sort_idx.map(|idx| columns.cols[idx].header);
     let mut table = StatefulTable::new()?;
     table.sort(sort_key, cfg.reverse);
 
@@ -460,7 +472,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(f.size());
 
-            let header_cells = columns.iter()
+            let header_cells = columns.cols.iter()
                 .enumerate()
                 .filter(|(_i, col)| col.enabled)
                 .map(|(i, col)| {
@@ -485,7 +497,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 ).map(|item| {
                     item.row(&columns)
                 });
-            let widths = columns.iter()
+            let widths = columns.cols.iter()
                 .filter(|col| col.enabled)
                 .map(|col| col.width)
                 .collect::<Vec<_>>();
@@ -560,15 +572,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Char('d') => {
                             cfg.delete ^= true;
-                            columns[COL_D_S].enabled = cfg.delete;
-                            columns[COL_KB_D].enabled = cfg.delete && cfg.size;
-                            columns[COL_KBS_D].enabled = cfg.delete;
-                            columns[COL_MS_D].enabled = cfg.delete;
+                            columns.cols[Columns::D_S].enabled = cfg.delete;
+                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
+                            columns.cols[Columns::KBS_D].enabled = cfg.delete;
+                            columns.cols[Columns::MS_D].enabled = cfg.delete;
                         }
                         Key::Char('o') => {
                             cfg.other ^= true;
-                            columns[COL_O_S].enabled = cfg.other;
-                            columns[COL_MS_O].enabled = cfg.other;
+                            columns.cols[Columns::O_S].enabled = cfg.other;
+                            columns.cols[Columns::MS_O].enabled = cfg.other;
                         }
                         Key::Char('-') => {
                             // Ideally this would be 'O' to mimic top's
@@ -579,18 +591,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                                         sort_idx = idx.checked_sub(1);
                                     }
                                     None => {
-                                        sort_idx = Some(columns.len() - 1);
+                                        sort_idx = Some(columns.cols.len() - 1);
                                     }
                                 }
                                 if sort_idx.is_none() {
                                     break;
                                 }
-                                if columns[sort_idx.unwrap()].enabled {
+                                if columns.cols[sort_idx.unwrap()].enabled {
                                     break;
                                 }
                             }
                             sort_key = sort_idx
-                                .map(|idx| columns[idx].header);
+                                .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
                             table.sort(sort_key, cfg.reverse);
                         }
@@ -603,17 +615,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     None => {sort_idx = Some(0);}
                                 }
                                 let idx = sort_idx.unwrap();
-                                if idx >= columns.len() {
+                                if idx >= columns.cols.len() {
                                     sort_idx = None;
                                     break;
                                 }
-                                if columns[idx].enabled {
+                                if columns.cols[idx].enabled {
                                     sort_idx = Some(idx);
                                     break;
                                 }
                             }
                             sort_key = sort_idx
-                                .map(|idx| columns[idx].header);
+                                .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
                             table.sort(sort_key, cfg.reverse);
                         }
@@ -626,9 +638,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Char('s') => {
                             cfg.size ^= true;
-                            columns[COL_KB_R].enabled = cfg.size;
-                            columns[COL_KB_W].enabled = cfg.size;
-                            columns[COL_KB_D].enabled = cfg.delete && cfg.size;
+                            columns.cols[Columns::KB_R].enabled = cfg.size;
+                            columns.cols[Columns::KB_W].enabled = cfg.size;
+                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
                         }
                         Key::Char('F') => {
                             cfg.filter = None;
