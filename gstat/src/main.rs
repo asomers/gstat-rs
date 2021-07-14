@@ -603,30 +603,28 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 data.sort(sort_idx, cfg.reverse);
                             }
                         }
-                        Key::Char('<') => {
-                            tick_rate /= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
-                        }
-                        Key::Char('>') => {
-                            tick_rate *= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
-                        }
-                        Key::Char('a') => {
-                            cfg.auto ^= true;
-                        }
-                        Key::Char('d') => {
-                            cfg.delete ^= true;
-                            columns.cols[Columns::D_S].enabled = cfg.delete;
-                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
-                            columns.cols[Columns::KBS_D].enabled = cfg.delete;
-                            columns.cols[Columns::MS_D].enabled = cfg.delete;
-                        }
-                        Key::Char('o') => {
-                            cfg.other ^= true;
-                            columns.cols[Columns::O_S].enabled = cfg.other;
-                            columns.cols[Columns::MS_O].enabled = cfg.other;
+                        Key::Char('+') => {
+                            // Ideally this would be 'o' to match top's
+                            // behavior.  But 'o' is already taken in gstat.
+                            loop {
+                                match sort_idx {
+                                    Some(idx) => {sort_idx = Some(idx + 1);}
+                                    None => {sort_idx = Some(0);}
+                                }
+                                let idx = sort_idx.unwrap();
+                                if idx >= columns.cols.len() {
+                                    sort_idx = None;
+                                    break;
+                                }
+                                if columns.cols[idx].enabled {
+                                    sort_idx = Some(idx);
+                                    break;
+                                }
+                            }
+                            let sort_key = sort_idx
+                                .map(|idx| columns.cols[idx].header);
+                            cfg.sort = sort_key.map(str::to_owned);
+                            data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('-') => {
                             // Ideally this would be 'O' to mimic top's
@@ -652,31 +650,47 @@ fn main() -> Result<(), Box<dyn Error>> {
                             cfg.sort = sort_key.map(str::to_owned);
                             data.sort(sort_idx, cfg.reverse);
                         }
-                        Key::Char('+') => {
-                            // Ideally this would be 'o' to match top's
-                            // behavior.  But 'o' is already taken in gstat.
-                            loop {
-                                match sort_idx {
-                                    Some(idx) => {sort_idx = Some(idx + 1);}
-                                    None => {sort_idx = Some(0);}
-                                }
-                                let idx = sort_idx.unwrap();
-                                if idx >= columns.cols.len() {
-                                    sort_idx = None;
-                                    break;
-                                }
-                                if columns.cols[idx].enabled {
-                                    sort_idx = Some(idx);
-                                    break;
-                                }
-                            }
-                            let sort_key = sort_idx
-                                .map(|idx| columns.cols[idx].header);
-                            cfg.sort = sort_key.map(str::to_owned);
-                            data.sort(sort_idx, cfg.reverse);
+                        Key::Char('<') => {
+                            tick_rate /= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
+                        }
+                        Key::Char('>') => {
+                            tick_rate *= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
+                        }
+                        Key::Char('F') => {
+                            cfg.filter = None;
+                            filter = None;
+                        }
+                        Key::Char('a') => {
+                            cfg.auto ^= true;
+                        }
+                        Key::Char('d') => {
+                            cfg.delete ^= true;
+                            columns.cols[Columns::D_S].enabled = cfg.delete;
+                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
+                            columns.cols[Columns::KBS_D].enabled = cfg.delete;
+                            columns.cols[Columns::MS_D].enabled = cfg.delete;
+                        }
+                        Key::Char('f') => {
+                            editting_regex = true;
+                            new_regex = String::new();
+                        }
+                        Key::Char('o') => {
+                            cfg.other ^= true;
+                            columns.cols[Columns::O_S].enabled = cfg.other;
+                            columns.cols[Columns::MS_O].enabled = cfg.other;
                         }
                         Key::Char('p') => {
                             cfg.physical ^= true;
+                        }
+                        Key::Char('q') => {
+                            if let Err(e) = confy::store("gstat-rs", &cfg) {
+                                eprintln!("Warning: failed to save config file: {}", e);
+                            }
+                            break;
                         }
                         Key::Char('r') => {
                             cfg.reverse ^= true;
@@ -687,20 +701,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             columns.cols[Columns::KB_R].enabled = cfg.size;
                             columns.cols[Columns::KB_W].enabled = cfg.size;
                             columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
-                        }
-                        Key::Char('F') => {
-                            cfg.filter = None;
-                            filter = None;
-                        }
-                        Key::Char('f') => {
-                            editting_regex = true;
-                            new_regex = String::new();
-                        }
-                        Key::Char('q') => {
-                            if let Err(e) = confy::store("gstat-rs", &cfg) {
-                                eprintln!("Warning: failed to save config file: {}", e);
-                            }
-                            break;
                         }
                         Key::Down => {
                             table.next();
