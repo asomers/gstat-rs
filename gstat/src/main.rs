@@ -28,19 +28,23 @@ use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
+    text::Text,
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, ListState,
+        Paragraph, Row, Table, TableState
+    },
     Terminal,
 };
 
-/// helper function to create a one-line popup box as a fraction of r's width
-fn popup_layout(percent_x: u16, r: Rect) -> Rect {
+/// helper function to create a one-line popup box
+fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Max((r.height - 3)/2),
-                Constraint::Length(3),
-                Constraint::Max((r.height - 3)/2),
+                Constraint::Max((r.height - y)/2),
+                Constraint::Length(y),
+                Constraint::Max((r.height - y)/2),
             ]
             .as_ref(),
         )
@@ -50,9 +54,9 @@ fn popup_layout(percent_x: u16, r: Rect) -> Rect {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Max((r.width - x) / 2),
+                Constraint::Length(x),
+                Constraint::Max((r.width - x) / 2),
             ]
             .as_ref(),
         )
@@ -118,6 +122,7 @@ impl BitOrAssign for Cli {
 }
 
 struct Column {
+    name: &'static str,
     header: &'static str,
     enabled: bool,
     width: Constraint
@@ -125,12 +130,13 @@ struct Column {
 
 impl Column {
     fn new(
+        name: &'static str,
         header: &'static str,
         enabled: bool,
         width: Constraint,
     ) -> Self
     {
-        Column {header, enabled, width}
+        Column {name, header, enabled, width}
     }
 
     fn min_width(&self) -> u16 {
@@ -143,7 +149,8 @@ impl Column {
 }
 
 struct Columns {
-    cols: [Column; Columns::MAX]
+    cols: [Column; Columns::MAX],
+    state: ListState
 }
 
 impl Columns {
@@ -169,26 +176,67 @@ impl Columns {
 
     fn new(cfg: &Cli) -> Self {
         let cols = [
-            Column::new("L(q)", true, Constraint::Length(5)),
-            Column::new(" ops/s", true, Constraint::Length(7)),
-            Column::new("   r/s", true, Constraint::Length(7)),
-            Column::new("kB/r", cfg.size, Constraint::Length(5)),
-            Column::new("kB/s r", true, Constraint::Length(7)),
-            Column::new("  ms/r", true, Constraint::Length(7)),
-            Column::new("   w/s", true, Constraint::Length(7)),
-            Column::new("kB/w", cfg.size, Constraint::Length(5)),
-            Column::new("kB/s w", true, Constraint::Length(7)),
-            Column::new("  ms/w", true, Constraint::Length(7)),
-            Column::new("   d/s", cfg.delete, Constraint::Length(7)),
-            Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5)),
-            Column::new("kB/s d", cfg.delete, Constraint::Length(7)),
-            Column::new("  ms/d", cfg.delete, Constraint::Length(7)),
-            Column::new("   o/s", cfg.other, Constraint::Length(7)),
-            Column::new("  ms/o", cfg.other, Constraint::Length(7)),
-            Column::new(" %busy", true, Constraint::Length(7)),
-            Column::new("Name", true, Constraint::Min(10)),
+            Column::new("Queue depth", "L(q)", true, Constraint::Length(5)),
+            Column::new("IOPs", " ops/s", true, Constraint::Length(7)),
+            Column::new("Read IOPs", "   r/s", true, Constraint::Length(7)),
+            Column::new("Read size", "kB/r", cfg.size, Constraint::Length(5)),
+            Column::new("Read throughput", "kB/s r", true,
+                        Constraint::Length(7)),
+            Column::new("Read latency", "  ms/r", true, Constraint::Length(7)),
+            Column::new("Write IOPs", "   w/s", true, Constraint::Length(7)),
+            Column::new("Write size", "kB/w", cfg.size, Constraint::Length(5)),
+            Column::new("Write throughput", "kB/s w", true,
+                        Constraint::Length(7)),
+            Column::new("Write latency", "  ms/w", true, Constraint::Length(7)),
+            Column::new("Delete IOPs", "   d/s", cfg.delete,
+                        Constraint::Length(7)),
+            Column::new("Delete size", "kB/d", cfg.size && cfg.delete,
+                        Constraint::Length(5)),
+            Column::new("Delete throughput", "kB/s d", cfg.delete,
+                        Constraint::Length(7)),
+            Column::new("Delete latency", "  ms/d", cfg.delete,
+                        Constraint::Length(7)),
+            Column::new("Other IOPs", "   o/s", cfg.other,
+                        Constraint::Length(7)),
+            Column::new("Other latency", "  ms/o", cfg.other,
+                        Constraint::Length(7)),
+            Column::new("Percent busy", " %busy", true, Constraint::Length(7)),
+            Column::new("Name", "Name", true, Constraint::Min(10)),
         ];
-        Columns {cols}
+        let state = Default::default();
+        Columns {cols, state}
+    }
+
+    pub const fn max_name_width(&self) -> u16 {
+        17
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.cols.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.cols.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
     }
 }
 
@@ -479,6 +527,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut editting_regex = false;
     let mut new_regex = String::new();
     let mut paused = false;
+    let mut selecting_columns = false;
 
     let mut columns = Columns::new(&cfg);
 
@@ -555,7 +604,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
 
             if editting_regex {
-                let area = popup_layout(60, f.size());
+                let area = popup_layout(40, 3, f.size());
                 let popup_box = Paragraph::new(new_regex.as_ref())
                     .block(
                         Block::default()
@@ -564,6 +613,31 @@ fn main() -> Result<(), Box<dyn Error>> {
                     );
                 f.render_widget(Clear, area);
                 f.render_widget(popup_box, area);
+            } else if selecting_columns {
+                let boxwidth = columns.max_name_width() + 6;
+                let area = popup_layout(boxwidth, 20, f.size());
+                f.render_widget(Clear, area);
+                let items = columns.cols.iter()
+                    .map(|c| {
+                        let text = if c.enabled {
+                            format!("[x] {}", c.name)
+                        } else {
+                            format!("[ ] {}", c.name)
+                        };
+                        ListItem::new(Text::from(text))
+                    })
+                    .collect::<Vec<_>>();
+
+                let list = List::new(items)
+                    .block(
+                        Block::default()
+                        .borders(Borders::ALL)
+                        .title("Select columns")
+                    ).highlight_style(
+                        Style::default()
+                        .add_modifier(Modifier::REVERSED)
+                    );
+                f.render_stateful_widget(list, area, &mut columns.state);
             }
         }).unwrap();
 
@@ -590,6 +664,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Esc => {
                             editting_regex = false;
+                        }
+                        _ => {}
+                    }
+                } else if selecting_columns {
+                    match key {
+                        Key::Char(' ') => {
+                            if let Some(i) = columns.state.selected() {
+                                columns.cols[i].enabled ^= true;
+                            }
+                        }
+                        Key::Down => {
+                            columns.next();
+                        }
+                        Key::Up => {
+                            columns.previous();
+                        }
+                        Key::Esc => {
+                            selecting_columns = false;
                         }
                         _ => {}
                     }
@@ -708,6 +800,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Key::Up => {
                             table.previous();
                         }
+                        Key::Delete => {
+                            // TODO: persist this change, and make it reversible.
+                            if let Some(idx) = sort_idx {
+                                columns.cols[idx].enabled = false;
+                            }
+                        }
+                        Key::Insert => {
+                            selecting_columns = true;
+                        }
                         _ => {}
                     }
                 }
@@ -723,4 +824,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod t {
+    use super::*;
+
+    #[test]
+    fn max_name_width() {
+        let cfg = Cli::default();
+        let columns = Columns::new(&cfg);
+        let expected = columns.cols.iter()
+            .map(|col| col.name.len())
+            .max()
+            .unwrap();
+        assert_eq!(expected, usize::from(columns.max_name_width()));
+    }
 }
