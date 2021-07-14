@@ -7,7 +7,6 @@ use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use std::{
-    collections::hash_map::HashMap,
     error::Error,
     io,
     mem,
@@ -137,16 +136,16 @@ struct Columns {
 }
 
 impl Columns {
-    const _QD: usize = 0;
-    const _OPS_S: usize = 1;
-    const _R_S: usize = 2;
+    const QD: usize = 0;
+    const OPS_S: usize = 1;
+    const R_S: usize = 2;
     const KB_R: usize = 3;
-    const _KBS_R: usize = 4;
-    const _MS_R: usize = 5;
-    const _W_S: usize = 6;
+    const KBS_R: usize = 4;
+    const MS_R: usize = 5;
+    const W_S: usize = 6;
     const KB_W: usize = 7;
-    const _KBS_W: usize = 8;
-    const _MS_W: usize = 9;
+    const KBS_W: usize = 8;
+    const MS_W: usize = 9;
     const D_S: usize = 10;
     const KB_D: usize = 11;
     const KBS_D: usize = 12;
@@ -154,7 +153,7 @@ impl Columns {
     const O_S: usize = 14;
     const MS_O: usize = 15;
     const PCT_BUSY: usize = 16;
-    const _NAME: usize = 17;
+    const NAME: usize = 17;
     const MAX: usize = 18;
 
     fn new(cfg: &Cli) -> Self {
@@ -203,9 +202,16 @@ impl Columns {
 /// The value of one metric of one geom
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 enum Field {
+    None,
     Int(u32),
     Float(f64),
     Str(String)
+}
+
+impl Default for Field {
+    fn default() -> Self {
+        Field::None
+    }
 }
 
 impl Field {
@@ -232,22 +238,44 @@ impl Field {
 }
 
 /// The data for one element in the table, usually a Geom provider
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct Element{
-    fields: HashMap<&'static str, Field>,
+    fields: [Field; Columns::MAX],
     rank: u32
 }
 
 impl Element {
-    fn insert(&mut self, k: &'static str, v: Field) -> Option<Field> {
-        self.fields.insert(k, v)
+    fn new(name: &str, rank: u32, stats: &Statistics) -> Self {
+        let mut f: [Field; Columns::MAX] = Default::default();
+        f[Columns::QD] = Field::Int(stats.queue_length());
+        f[Columns::OPS_S] = Field::Float(stats.transfers_per_second());
+        f[Columns::R_S] = Field::Float(stats.transfers_per_second_read());
+        f[Columns::KB_R] = Field::Float(stats.kb_per_transfer_read());
+        f[Columns::KBS_R] = Field::Float(stats.mb_per_second_read() * 1024.0);
+        f[Columns::MS_R] = Field::Float(stats.ms_per_transaction_read());
+        f[Columns::W_S] = Field::Float(stats.transfers_per_second_write());
+        f[Columns::KB_W] = Field::Float(stats.kb_per_transfer_write());
+        f[Columns::KBS_W] = Field::Float(stats.mb_per_second_write() * 1024.0);
+        f[Columns::MS_W] = Field::Float(stats.ms_per_transaction_write());
+        f[Columns::D_S] = Field::Float(stats.transfers_per_second_free());
+        f[Columns::KB_D] = Field::Float(stats.kb_per_transfer_free());
+        f[Columns::KBS_D] = Field::Float(stats.mb_per_second_free() * 1024.0);
+        f[Columns::MS_D] = Field::Float(stats.ms_per_transaction_free());
+        f[Columns::O_S] = Field::Float(stats.transfers_per_second_other());
+        f[Columns::MS_O] = Field::Float(stats.ms_per_transaction_other());
+        f[Columns::PCT_BUSY] = Field::Float(stats.busy_pct());
+        f[Columns::NAME] = Field::Str(name.to_owned());
+        Element {
+            fields: f,
+            rank
+        }
     }
 
     fn row(&self, columns: &Columns) -> Row {
         const BUSY_HIGH_THRESH: f64 = 80.0;
         const BUSY_MEDIUM_THRESH: f64 = 50.0;
 
-        let pct_busy = self[" %busy"].as_float();
+        let pct_busy = self[Columns::PCT_BUSY].as_float();
         let color = if pct_busy > BUSY_HIGH_THRESH {
             Color::Red
         } else if pct_busy > BUSY_MEDIUM_THRESH {
@@ -266,17 +294,17 @@ impl Element {
                 } else {
                     style
                 };
-                Cell::from((col.format)(&self.fields[col.header]))
+                Cell::from((col.format)(&self.fields[i]))
                     .style(style)
             }).collect::<Vec<_>>();
         Row::new(cells)
     }
 }
 
-impl Index<&'static str> for Element {
+impl Index<usize> for Element {
     type Output = Field;
 
-    fn index(&self, key: &'static str) -> &Self::Output {
+    fn index(&self, key: usize) -> &Self::Output {
         &self.fields[key]
     }
 }
@@ -361,42 +389,8 @@ impl StatefulTable {
             if let Some(gident) = self.tree.lookup(curstat.id()) {
                 if let Some(rank) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
-                    let mut elem = Element::default();
-                    elem.insert("Name", Field::Str(
-                        gident.name().to_string_lossy().to_string()));
-                    elem.insert("L(q)", Field::Int(stats.queue_length()));
-                    elem.rank = rank;
-                    elem.insert(" ops/s",
-                                Field::Float(stats.transfers_per_second()));
-                    elem.insert("   r/s", Field::Float(
-                        stats.transfers_per_second_read()));
-                    elem.insert("kB/r", Field::Float(
-                        stats.kb_per_transfer_read()));
-                    elem.insert("kB/s r", Field::Float(
-                        stats.mb_per_second_read() * 1024.0));
-                    elem.insert("  ms/r", Field::Float(
-                        stats.ms_per_transaction_read()));
-                    elem.insert("   w/s", Field::Float(
-                        stats.transfers_per_second_write()));
-                    elem.insert("kB/w", Field::Float(
-                        stats.kb_per_transfer_write()));
-                    elem.insert("kB/s w", Field::Float(
-                        stats.mb_per_second_write() * 1024.0));
-                    elem.insert("  ms/w", Field::Float(
-                        stats.ms_per_transaction_write()));
-                    elem.insert("   d/s", Field::Float(
-                        stats.transfers_per_second_free()));
-                    elem.insert("kB/d", Field::Float(
-                        stats.kb_per_transfer_free()));
-                    elem.insert("kB/s d", Field::Float(
-                        stats.mb_per_second_free() * 1024.0));
-                    elem.insert("  ms/d", Field::Float(
-                        stats.ms_per_transaction_free()));
-                    elem.insert("   o/s", Field::Float(
-                        stats.transfers_per_second_other()));
-                    elem.insert("  ms/o", Field::Float(
-                        stats.ms_per_transaction_other()));
-                    elem.insert(" %busy", Field::Float(stats.busy_pct()));
+                    let elem = Element::new(&gident.name().to_string_lossy(),
+                        rank, &stats);
                     self.data.items.push(elem);
                 }
             }
@@ -404,8 +398,8 @@ impl StatefulTable {
         Ok(())
     }
 
-    fn sort(&mut self, sort_key: Option<&'static str>, reverse: bool) {
-        if let Some(k) = sort_key {
+    fn sort(&mut self, sort_idx: Option<usize>, reverse: bool) {
+        if let Some(k) = sort_idx {
             self.data.items.sort_by(|l, r| {
                 if reverse {
                     r.fields[k].partial_cmp(&l.fields[k])
@@ -459,9 +453,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let mut sort_key = sort_idx.map(|idx| columns.cols[idx].header);
     let mut table = StatefulTable::new()?;
-    table.sort(sort_key, cfg.reverse);
+    table.sort(sort_idx, cfg.reverse);
 
     let normal_style = Style::default().bg(Color::Blue);
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
@@ -488,11 +481,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter()
-                .filter(|item| !cfg.auto || item[" %busy"].as_float() > 0.1)
+                .filter(|item| !cfg.auto || item[Columns::PCT_BUSY].as_float() > 0.1)
                 .filter(|item| !cfg.physical || item.rank == 1)
                 .filter(|item|
                         filter.as_ref()
-                        .map(|f| f.is_match(item["Name"].as_str()))
+                        .map(|f| f.is_match(item[Columns::NAME].as_str()))
                         .unwrap_or(true)
                 ).map(|item| {
                     item.row(&columns)
@@ -525,7 +518,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Some(Event::Tick) => {
                 if !paused {
                     table.refresh()?;
-                    table.sort(sort_key, cfg.reverse);
+                    table.sort(sort_idx, cfg.reverse);
                 }
             }
             Some(Event::Key(key)) => {
@@ -554,7 +547,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             if !paused {
                                 // Refresh immediately after unpause.
                                 table.refresh()?;
-                                table.sort(sort_key, cfg.reverse);
+                                table.sort(sort_idx, cfg.reverse);
                             }
                         }
                         Key::Char('<') => {
@@ -601,10 +594,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     break;
                                 }
                             }
-                            sort_key = sort_idx
+                            let sort_key = sort_idx
                                 .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_key, cfg.reverse);
+                            table.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('+') => {
                             // Ideally this would be 'o' to match top's
@@ -624,17 +617,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     break;
                                 }
                             }
-                            sort_key = sort_idx
+                            let sort_key = sort_idx
                                 .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_key, cfg.reverse);
+                            table.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('p') => {
                             cfg.physical ^= true;
                         }
                         Key::Char('r') => {
                             cfg.reverse ^= true;
-                            table.sort(sort_key, cfg.reverse);
+                            table.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('s') => {
                             cfg.size ^= true;
