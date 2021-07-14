@@ -7,10 +7,11 @@ use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use std::{
+    cmp::Ordering,
     error::Error,
     io,
     mem,
-    ops::{BitOrAssign, Index},
+    ops::BitOrAssign,
     time::Duration
 };
 use termion::{
@@ -115,7 +116,6 @@ impl BitOrAssign for Cli {
 struct Column {
     header: &'static str,
     enabled: bool,
-    format: fn(&Field) -> String,
     width: Constraint
 }
 
@@ -124,10 +124,9 @@ impl Column {
         header: &'static str,
         enabled: bool,
         width: Constraint,
-        format: fn(&Field) -> String
     ) -> Self
     {
-        Column {header, enabled, format, width}
+        Column {header, enabled, width}
     }
 }
 
@@ -158,154 +157,175 @@ impl Columns {
 
     fn new(cfg: &Cli) -> Self {
         let cols = [
-            Column::new("L(q)", true, Constraint::Length(5),
-                |f| format!("{:>4}", f.as_int())),
-            Column::new(" ops/s", true, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("   r/s", true, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("kB/r", cfg.size, Constraint::Length(5),
-                |f| format!("{:>4.0}", f.as_float())),
-            Column::new("kB/s r", true, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("  ms/r", true, Constraint::Length(7),
-                |f| format!("{:>6.1}", f.as_float())),
-            Column::new("   w/s", true, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("kB/w", cfg.size, Constraint::Length(5),
-                |f| format!("{:>4.0}", f.as_float())),
-            Column::new("kB/s w", true, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("  ms/w", true, Constraint::Length(7),
-                |f| format!("{:>6.1}", f.as_float())),
-            Column::new("   d/s", cfg.delete, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5),
-                |f| format!("{:>4.0}", f.as_float())),
-            Column::new("kB/s d", cfg.delete, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("  ms/d", cfg.delete, Constraint::Length(7),
-                |f| format!("{:>6.1}", f.as_float())),
-            Column::new("   o/s", cfg.other, Constraint::Length(7),
-                |f| format!("{:>6.0}", f.as_float())),
-            Column::new("  ms/o", cfg.other, Constraint::Length(7),
-                |f| format!("{:>6.1}", f.as_float())),
-            Column::new(" %busy", true, Constraint::Length(7),
-                |f| format!("{:>6.1}", f.as_float())),
-            Column::new("Name", true, Constraint::Min(10),
-                |f| f.as_str().to_string()),
+            Column::new("L(q)", true, Constraint::Length(5)),
+            Column::new(" ops/s", true, Constraint::Length(7)),
+            Column::new("   r/s", true, Constraint::Length(7)),
+            Column::new("kB/r", cfg.size, Constraint::Length(5)),
+            Column::new("kB/s r", true, Constraint::Length(7)),
+            Column::new("  ms/r", true, Constraint::Length(7)),
+            Column::new("   w/s", true, Constraint::Length(7)),
+            Column::new("kB/w", cfg.size, Constraint::Length(5)),
+            Column::new("kB/s w", true, Constraint::Length(7)),
+            Column::new("  ms/w", true, Constraint::Length(7)),
+            Column::new("   d/s", cfg.delete, Constraint::Length(7)),
+            Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5)),
+            Column::new("kB/s d", cfg.delete, Constraint::Length(7)),
+            Column::new("  ms/d", cfg.delete, Constraint::Length(7)),
+            Column::new("   o/s", cfg.other, Constraint::Length(7)),
+            Column::new("  ms/o", cfg.other, Constraint::Length(7)),
+            Column::new(" %busy", true, Constraint::Length(7)),
+            Column::new("Name", true, Constraint::Min(10)),
         ];
         Columns {cols}
-    }
-}
-
-/// The value of one metric of one geom
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-enum Field {
-    None,
-    Int(u32),
-    Float(f64),
-    Str(String)
-}
-
-impl Default for Field {
-    fn default() -> Self {
-        Field::None
-    }
-}
-
-impl Field {
-    fn as_int(&self) -> u32 {
-        match self {
-            Field::Int(x) => *x,
-            _ => panic!("not an int")
-        }
-    }
-
-    fn as_float(&self) -> f64 {
-        match self {
-            Field::Float(x) => *x,
-            _ => panic!("not an float")
-        }
-    }
-
-    fn as_str(&self) -> &str {
-        match self {
-            Field::Str(x) => x,
-            _ => panic!("not a string")
-        }
     }
 }
 
 /// The data for one element in the table, usually a Geom provider
 #[derive(Clone, Debug)]
 struct Element{
-    fields: [Field; Columns::MAX],
+    qd: u32,
+    ops_s: f64,
+    r_s: f64,
+    kb_r: f64,
+    kbs_r: f64,
+    ms_r: f64,
+    w_s: f64,
+    kb_w: f64,
+    kbs_w: f64,
+    ms_w: f64,
+    d_s: f64,
+    kb_d: f64,
+    kbs_d: f64,
+    ms_d: f64,
+    o_s: f64,
+    ms_o: f64,
+    pct_busy: f64,
+    name: String,
     rank: u32
 }
 
 impl Element {
     fn new(name: &str, rank: u32, stats: &Statistics) -> Self {
-        let mut f: [Field; Columns::MAX] = Default::default();
-        f[Columns::QD] = Field::Int(stats.queue_length());
-        f[Columns::OPS_S] = Field::Float(stats.transfers_per_second());
-        f[Columns::R_S] = Field::Float(stats.transfers_per_second_read());
-        f[Columns::KB_R] = Field::Float(stats.kb_per_transfer_read());
-        f[Columns::KBS_R] = Field::Float(stats.mb_per_second_read() * 1024.0);
-        f[Columns::MS_R] = Field::Float(stats.ms_per_transaction_read());
-        f[Columns::W_S] = Field::Float(stats.transfers_per_second_write());
-        f[Columns::KB_W] = Field::Float(stats.kb_per_transfer_write());
-        f[Columns::KBS_W] = Field::Float(stats.mb_per_second_write() * 1024.0);
-        f[Columns::MS_W] = Field::Float(stats.ms_per_transaction_write());
-        f[Columns::D_S] = Field::Float(stats.transfers_per_second_free());
-        f[Columns::KB_D] = Field::Float(stats.kb_per_transfer_free());
-        f[Columns::KBS_D] = Field::Float(stats.mb_per_second_free() * 1024.0);
-        f[Columns::MS_D] = Field::Float(stats.ms_per_transaction_free());
-        f[Columns::O_S] = Field::Float(stats.transfers_per_second_other());
-        f[Columns::MS_O] = Field::Float(stats.ms_per_transaction_other());
-        f[Columns::PCT_BUSY] = Field::Float(stats.busy_pct());
-        f[Columns::NAME] = Field::Str(name.to_owned());
         Element {
-            fields: f,
+            qd: stats.queue_length(),
+            ops_s: stats.transfers_per_second(),
+            r_s: stats.transfers_per_second_read(),
+            kb_r: stats.kb_per_transfer_read(),
+            kbs_r: stats.mb_per_second_read() * 1024.0,
+            ms_r: stats.ms_per_transaction_read(),
+            w_s: stats.transfers_per_second_write(),
+            kb_w: stats.kb_per_transfer_write(),
+            kbs_w: stats.mb_per_second_write() * 1024.0,
+            ms_w: stats.ms_per_transaction_write(),
+            d_s: stats.transfers_per_second_free(),
+            kb_d: stats.kb_per_transfer_free(),
+            kbs_d: stats.mb_per_second_free() * 1024.0,
+            ms_d: stats.ms_per_transaction_free(),
+            o_s: stats.transfers_per_second_other(),
+            ms_o: stats.ms_per_transaction_other(),
+            pct_busy: stats.busy_pct(),
+            name: name.to_owned(),
+            //fields: f,
             rank
         }
     }
 
-    fn row(&self, columns: &Columns) -> Row {
-        const BUSY_HIGH_THRESH: f64 = 80.0;
-        const BUSY_MEDIUM_THRESH: f64 = 50.0;
-
-        let pct_busy = self[Columns::PCT_BUSY].as_float();
-        let color = if pct_busy > BUSY_HIGH_THRESH {
-            Color::Red
-        } else if pct_busy > BUSY_MEDIUM_THRESH {
-            Color::Magenta
-        } else {
-            Color::Green
-        };
-
-        let cells = columns.cols.iter()
-            .enumerate()
-            .filter(|(_i, col)| col.enabled)
-            .map(|(i, col)| {
-                let style = Style::default();
-                let style = if i == Columns::PCT_BUSY {
-                    style.fg(color)
-                } else {
-                    style
-                };
-                Cell::from((col.format)(&self.fields[i]))
-                    .style(style)
-            }).collect::<Vec<_>>();
-        Row::new(cells)
+    /// Like [`std::cmp::PartialOrd::partial_cmp`], but based on the selected
+    /// field.
+    fn partial_cmp_by(&self, k: usize, other: &Self) -> Option<Ordering> {
+        match k {
+            Columns::QD => self.qd.partial_cmp(&other.qd),
+            Columns::OPS_S => self.ops_s.partial_cmp(&other.ops_s),
+            Columns::R_S => self.r_s.partial_cmp(&other.r_s),
+            Columns::KB_R => self.kb_r.partial_cmp(&other.kb_r),
+            Columns::KBS_R => self.kbs_r.partial_cmp(&other.kbs_r),
+            Columns::MS_R => self.ms_r.partial_cmp(&other.ms_r),
+            Columns::W_S => self.w_s.partial_cmp(&other.w_s),
+            Columns::KB_W => self.kb_w.partial_cmp(&other.kb_w),
+            Columns::KBS_W => self.kbs_w.partial_cmp(&other.kbs_w),
+            Columns::MS_W => self.ms_w.partial_cmp(&other.ms_w),
+            Columns::D_S => self.d_s.partial_cmp(&other.d_s),
+            Columns::KB_D => self.kb_d.partial_cmp(&other.kb_d),
+            Columns::KBS_D => self.kbs_d.partial_cmp(&other.kbs_d),
+            Columns::MS_D => self.ms_d.partial_cmp(&other.ms_d),
+            Columns::O_S => self.o_s.partial_cmp(&other.o_s),
+            Columns::MS_O => self.ms_o.partial_cmp(&other.ms_o),
+            Columns::PCT_BUSY => self.pct_busy.partial_cmp(&other.pct_busy),
+            Columns::NAME => self.name.partial_cmp(&other.name),
+            _ => None
+        }
     }
-}
 
-impl Index<usize> for Element {
-    type Output = Field;
+    fn row(&self, columns: &Columns) -> Row {
+        let mut cells = Vec::with_capacity(Columns::MAX);
+        if columns.cols[Columns::QD].enabled {
+            cells.push(Cell::from(format!("{:>4}", self.qd)));
+        }
+        if columns.cols[Columns::OPS_S].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.ops_s)));
+        }
+        if columns.cols[Columns::R_S].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.r_s)));
+        }
+        if columns.cols[Columns::KB_R].enabled {
+            cells.push(Cell::from(format!("{:>4.0}", self.kb_r)));
+        }
+        if columns.cols[Columns::KBS_R].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.kbs_r)));
+        }
+        if columns.cols[Columns::MS_R].enabled {
+            cells.push(Cell::from(format!("{:>6.1}", self.ms_r)));
+        }
+        if columns.cols[Columns::W_S].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.w_s)));
+        }
+        if columns.cols[Columns::KB_W].enabled {
+            cells.push(Cell::from(format!("{:>4.0}", self.kb_w)));
+        }
+        if columns.cols[Columns::KBS_W].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.kbs_w)));
+        }
+        if columns.cols[Columns::MS_W].enabled {
+            cells.push(Cell::from(format!("{:>6.1}", self.ms_w)));
+        }
+        if columns.cols[Columns::D_S].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.d_s)));
+        }
+        if columns.cols[Columns::KB_D].enabled {
+            cells.push(Cell::from(format!("{:>4.0}", self.kb_d)));
+        }
+        if columns.cols[Columns::KBS_D].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.kbs_d)));
+        }
+        if columns.cols[Columns::MS_D].enabled {
+            cells.push(Cell::from(format!("{:>6.1}", self.ms_d)));
+        }
+        if columns.cols[Columns::O_S].enabled {
+            cells.push(Cell::from(format!("{:>6.0}", self.o_s)));
+        }
+        if columns.cols[Columns::MS_O].enabled {
+            cells.push(Cell::from(format!("{:>6.1}", self.ms_o)));
+        }
+        if columns.cols[Columns::PCT_BUSY].enabled {
+            const BUSY_HIGH_THRESH: f64 = 80.0;
+            const BUSY_MEDIUM_THRESH: f64 = 50.0;
 
-    fn index(&self, key: usize) -> &Self::Output {
-        &self.fields[key]
+            let color = if self.pct_busy > BUSY_HIGH_THRESH {
+                Color::Red
+            } else if self.pct_busy > BUSY_MEDIUM_THRESH {
+                Color::Magenta
+            } else {
+                Color::Green
+            };
+            let style = Style::default().fg(color);
+            let s = format!("{:>6.1}", self.pct_busy);
+            let cell = Cell::from(s).style(style);
+            cells.push(cell);
+        }
+        if columns.cols[Columns::NAME].enabled {
+            cells.push(Cell::from(self.name.clone()));
+        }
+        Row::new(cells)
     }
 }
 
@@ -402,9 +422,9 @@ impl StatefulTable {
         if let Some(k) = sort_idx {
             self.data.items.sort_by(|l, r| {
                 if reverse {
-                    r.fields[k].partial_cmp(&l.fields[k])
+                    r.partial_cmp_by(k, l)
                 } else {
-                    l.fields[k].partial_cmp(&r.fields[k])
+                    l.partial_cmp_by(k, r)
                 }.unwrap()
             });
         }
@@ -481,14 +501,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             let header = Row::new(header_cells)
                 .style(normal_style);
             let rows = table.data.items.iter()
-                .filter(|item| !cfg.auto || item[Columns::PCT_BUSY].as_float() > 0.1)
-                .filter(|item| !cfg.physical || item.rank == 1)
-                .filter(|item|
+                .filter(|elem| !cfg.auto || elem.pct_busy > 0.1)
+                .filter(|elem| !cfg.physical || elem.rank == 1)
+                .filter(|elem|
                         filter.as_ref()
-                        .map(|f| f.is_match(item[Columns::NAME].as_str()))
+                        .map(|f| f.is_match(&elem.name))
                         .unwrap_or(true)
-                ).map(|item| {
-                    item.row(&columns)
+                ).map(|elem| {
+                    elem.row(&columns)
                 });
             let widths = columns.cols.iter()
                 .filter(|col| col.enabled)
