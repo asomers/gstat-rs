@@ -4,4 +4,3 @@
 **/*.rej
 **/*.diff
 **/.*.swp
-Cargo.lock
