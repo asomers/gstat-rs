@@ -230,8 +230,7 @@ impl Columns {
             Some(cb) => cb,
             None => {
                 // Can only happen when using --reset-config
-                cfg.columns = Some(ColumnsEnabled(Self::DEFAULT_ENABLED));
-                cfg.columns.unwrap()
+                ColumnsEnabled(Self::DEFAULT_ENABLED)
             }
         };
         // Apply the -ods switches, for legacy compatibility
@@ -251,6 +250,8 @@ impl Columns {
             cb.set_kb_r(true);
             cb.set_kb_w(true);
         }
+        // Write back any changes we made.
+        cfg.columns = Some(cb);
         let cols = [
             Column::new("Queue depth", "L(q)", cb.qd(),
                         Constraint::Length(5)),
@@ -786,8 +787,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                         }
                         Key::Char('+') => {
-                            // Ideally this would be 'o' to match top's
-                            // behavior.  But 'o' is already taken in gstat.
                             loop {
                                 match sort_idx {
                                     Some(idx) => {sort_idx = Some(idx + 1);}
@@ -809,8 +808,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('-') => {
-                            // Ideally this would be 'O' to mimic top's
-                            // behavior.  But 'o' is already taken in gstat.
                             loop {
                                 match sort_idx {
                                     Some(idx) => {
@@ -849,21 +846,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Key::Char('a') => {
                             cfg.auto ^= true;
                         }
-                        Key::Char('d') => {
-                            cfg.delete ^= true;
-                            columns.cols[Columns::D_S].enabled = cfg.delete;
-                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
-                            columns.cols[Columns::KBS_D].enabled = cfg.delete;
-                            columns.cols[Columns::MS_D].enabled = cfg.delete;
-                        }
                         Key::Char('f') => {
                             editting_regex = true;
                             new_regex = String::new();
-                        }
-                        Key::Char('o') => {
-                            cfg.other ^= true;
-                            columns.cols[Columns::O_S].enabled = cfg.other;
-                            columns.cols[Columns::MS_O].enabled = cfg.other;
                         }
                         Key::Char('p') => {
                             cfg.physical ^= true;
@@ -877,12 +862,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Key::Char('r') => {
                             cfg.reverse ^= true;
                             data.sort(sort_idx, cfg.reverse);
-                        }
-                        Key::Char('s') => {
-                            cfg.size ^= true;
-                            columns.cols[Columns::KB_R].enabled = cfg.size;
-                            columns.cols[Columns::KB_W].enabled = cfg.size;
-                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
                         }
                         Key::Down => {
                             table.next();

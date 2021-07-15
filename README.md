@@ -13,8 +13,11 @@ disks.  The key differences are:
 
 * gstat-rs supports sorting the disks using the '+', '-', and 'r' keys, and the
   "--sort" and "-r" command line options.
-* gstat-rs can enable/disable optional columns at any time using the '-s',
-  '-d', and '-o' keys.  gstat can only do that at startup.
+* gstat-rs can enable/disable columns at any time using the insert and
+  delete keys.  '-d', and '-o' keys.  gstat can only do that at startup, and
+  only for certain infrequently used columns.
+* If the screen has enough space, gstat-rs will display multiple disks side by
+  side.
 * gstat-rs can pause the display without exiting the program.
 * gstat-rs's settings are automatically persisted to a config file.
 * gstat-rs does not support batch mode (`-bBC`) output.  If you want that kind
