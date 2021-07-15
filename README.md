@@ -14,8 +14,8 @@ disks.  The key differences are:
 * gstat-rs supports sorting the disks using the '+', '-', and 'r' keys, and the
   "--sort" and "-r" command line options.
 * gstat-rs can enable/disable columns at any time using the insert and
-  delete keys.  '-d', and '-o' keys.  gstat can only do that at startup, and
-  only for certain infrequently used columns.
+  delete keys.  gstat can only do that at startup, and only for certain
+  infrequently used columns.
 * If the screen has enough space, gstat-rs will display multiple disks side by
   side.
 * gstat-rs can pause the display without exiting the program.
