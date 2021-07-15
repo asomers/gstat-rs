@@ -13,6 +13,11 @@ targets = [
   "x86_64-unknown-freebsd",
 ]
 
+# Skip tagging and pushing.  Those will be done by the gstat crate
+[package.metadata.release]
+disable-tag = true
+disable-push = true
+
 [dependencies]
 freebsd-libgeom-sys = { version = "=0.1.0", path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"
