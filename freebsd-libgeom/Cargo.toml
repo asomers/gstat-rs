@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2018"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
+repository = "https://github.com/asomers/gstat-rs"
 description = "Rust bindings to FreeBSD's libgeom library"
 categories = ["api-bindings", "os::freebsd-apis"]
 keywords = ["freebsd"]
