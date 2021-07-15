@@ -47,6 +47,9 @@ task:
   freebsd_instance:
     image: freebsd-13-0-release-amd64
   << : *COMMON
+  doc_script:
+    - . $HOME/.cargo/env
+    - cargo doc --all-features --no-deps
   clippy_script:
     - . $HOME/.cargo/env
     - rustup component add clippy

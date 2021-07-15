@@ -65,7 +65,7 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-/// Drop-in compatible gstat(8) replacement
+/// Drop-in replacement for gstat(8)
 // TODO: shorten the help options so they fit on 80 columns.
 #[derive(Debug, Default, Deserialize, Options, Serialize)]
 struct Cli {

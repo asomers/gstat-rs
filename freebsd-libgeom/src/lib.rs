@@ -1,6 +1,9 @@
-/// Safe bindings to FreeBSD's libgeom
-///
-/// https://www.freebsd.org/cgi/man.cgi?query=libgeom
+//! Safe bindings to FreeBSD's libgeom
+//!
+//! The primary purpose of this crate is to support the
+//! [`gstat`](https://crates.io/crates/gstat) crate, so some bindings may be
+//! missing.  Open a Github issue if you have a good use for them.
+//! <https://www.freebsd.org/cgi/man.cgi?query=libgeom>
 
 use freebsd_libgeom_sys::*;
 use lazy_static::lazy_static;
@@ -175,6 +178,8 @@ impl<'a> Gident<'a> {
 }
 
 /// A device identifier as contained in `struct devstat`.
+///
+/// It's an opaque structure, useful only with [`Tree::lookup`].
 #[derive(Debug, Copy, Clone)]
 pub struct Id<'a> {
     id: *const c_void,
