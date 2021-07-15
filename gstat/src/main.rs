@@ -1,6 +1,10 @@
 mod util;
 
-use crate::util::event::{Event, Events};
+use bitfield::bitfield;
+use crate::util::{
+    event::{Event, Events},
+    iter::IteratorExt
+};
 use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
@@ -11,7 +15,9 @@ use std::{
     error::Error,
     io,
     mem,
+    num::NonZeroU16,
     ops::BitOrAssign,
+    str::FromStr,
     time::Duration
 };
 use termion::{
@@ -24,19 +30,23 @@ use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState},
+    text::Text,
+    widgets::{
+        Block, Borders, Cell, Clear, List, ListItem, ListState,
+        Paragraph, Row, Table, TableState
+    },
     Terminal,
 };
 
-/// helper function to create a one-line popup box as a fraction of r's width
-fn popup_layout(percent_x: u16, r: Rect) -> Rect {
+/// helper function to create a one-line popup box
+fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Max((r.height - 3)/2),
-                Constraint::Length(3),
-                Constraint::Max((r.height - 3)/2),
+                Constraint::Max((r.height - y)/2),
+                Constraint::Length(y),
+                Constraint::Max((r.height - y)/2),
             ]
             .as_ref(),
         )
@@ -46,15 +56,14 @@ fn popup_layout(percent_x: u16, r: Rect) -> Rect {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Max((r.width - x) / 2),
+                Constraint::Length(x),
+                Constraint::Max((r.width - x) / 2),
             ]
             .as_ref(),
         )
         .split(popup_layout[1])[1]
 }
-
 
 /// Drop-in compatible gstat(8) replacement
 // TODO: shorten the help options so they fit on 80 columns.
@@ -94,7 +103,13 @@ struct Cli {
     #[options(short = 'r')]
     reverse: bool,
     /// Sort by the named column.  The name should match the column header.
-    sort: Option<String>
+    sort: Option<String>,
+    /// Bitfield of columns to enable
+    // TODO: hide this from the CLI, either using
+    // https://github.com/murarth/gumdrop/issues/52
+    // or by switching to structopt
+    #[serde(default = "default_columns_enabled")]
+    columns: Option<ColumnsEnabled>,
 }
 
 impl BitOrAssign for Cli {
@@ -110,10 +125,12 @@ impl BitOrAssign for Cli {
         self.physical |= rhs.physical;
         self.reverse |= rhs.reverse;
         self.sort = rhs.sort.or(self.sort.take());
+        self.columns = rhs.columns.or(self.columns.take());
     }
 }
 
 struct Column {
+    name: &'static str,
     header: &'static str,
     enabled: bool,
     width: Constraint
@@ -121,17 +138,69 @@ struct Column {
 
 impl Column {
     fn new(
+        name: &'static str,
         header: &'static str,
         enabled: bool,
         width: Constraint,
     ) -> Self
     {
-        Column {header, enabled, width}
+        Column {name, header, enabled, width}
+    }
+
+    fn min_width(&self) -> u16 {
+        match self.width {
+            Constraint::Min(x) => x,
+            Constraint::Length(x) => x,
+            _ => unreachable!("gstat-rs doesn't create columns like this")
+        }
+    }
+}
+
+bitfield!{
+    #[derive(Clone, Copy, Deserialize, Serialize)]
+    pub struct ColumnsEnabled(u32);
+    impl Debug;
+    u32; qd, set_qd: 0;
+    u32; ops_s, set_ops_s: 1;
+    u32; r_s, set_r_s: 2;
+    u32; kb_r, set_kb_r: 3;
+    u32; kbs_r, set_kbs_r: 4;
+    u32; ms_r, set_ms_r: 5;
+    u32; w_s, set_w_s: 6;
+    u32; kb_w, set_kb_w: 7;
+    u32; kbs_w, set_kbs_w: 8;
+    u32; ms_w, set_ms_w: 9;
+    u32; d_s, set_d_s: 10;
+    u32; kb_d, set_kb_d: 11;
+    u32; kbs_d, set_kbs_d: 12;
+    u32; ms_d, set_ms_d: 13;
+    u32; o_s, set_o_s: 14;
+    u32; ms_o, set_ms_o: 15;
+    u32; pct_busy, set_pct_busy: 16;
+    u32; name, set_name: 17;
+}
+
+impl Default for ColumnsEnabled {
+    fn default() -> Self {
+        ColumnsEnabled(Columns::DEFAULT_ENABLED)
+    }
+}
+
+fn default_columns_enabled() -> Option<ColumnsEnabled> {
+    Some(Default::default())
+}
+
+// TODO: remove this impl.  It only exists because gumdrop can't skip a field.
+impl FromStr for ColumnsEnabled {
+    type Err = io::Error;
+    fn from_str(_s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::default())
     }
 }
 
 struct Columns {
-    cols: [Column; Columns::MAX]
+    cols: [Column; Columns::LEN],
+    state: ListState
 }
 
 impl Columns {
@@ -153,30 +222,109 @@ impl Columns {
     const MS_O: usize = 15;
     const PCT_BUSY: usize = 16;
     const NAME: usize = 17;
-    const MAX: usize = 18;
+    const LEN: usize = 18;
+    const DEFAULT_ENABLED: u32 = 0x30377;
 
-    fn new(cfg: &Cli) -> Self {
+    fn new(cfg: &mut Cli) -> Self {
+        let mut cb = match cfg.columns {
+            Some(cb) => cb,
+            None => {
+                // Can only happen when using --reset-config
+                ColumnsEnabled(Self::DEFAULT_ENABLED)
+            }
+        };
+        // Apply the -ods switches, for legacy compatibility
+        if cfg.delete {
+            cb.set_d_s(true);
+            cb.set_kbs_d(true);
+            cb.set_ms_d(true);
+        }
+        if cfg.other {
+            cb.set_o_s(true);
+            cb.set_ms_o(true);
+        }
+        if cfg.delete && cfg.size {
+            cb.set_kb_d(true);
+        }
+        if cfg.size {
+            cb.set_kb_r(true);
+            cb.set_kb_w(true);
+        }
+        // Write back any changes we made.
+        cfg.columns = Some(cb);
         let cols = [
-            Column::new("L(q)", true, Constraint::Length(5)),
-            Column::new(" ops/s", true, Constraint::Length(7)),
-            Column::new("   r/s", true, Constraint::Length(7)),
-            Column::new("kB/r", cfg.size, Constraint::Length(5)),
-            Column::new("kB/s r", true, Constraint::Length(7)),
-            Column::new("  ms/r", true, Constraint::Length(7)),
-            Column::new("   w/s", true, Constraint::Length(7)),
-            Column::new("kB/w", cfg.size, Constraint::Length(5)),
-            Column::new("kB/s w", true, Constraint::Length(7)),
-            Column::new("  ms/w", true, Constraint::Length(7)),
-            Column::new("   d/s", cfg.delete, Constraint::Length(7)),
-            Column::new("kB/d", cfg.size && cfg.delete, Constraint::Length(5)),
-            Column::new("kB/s d", cfg.delete, Constraint::Length(7)),
-            Column::new("  ms/d", cfg.delete, Constraint::Length(7)),
-            Column::new("   o/s", cfg.other, Constraint::Length(7)),
-            Column::new("  ms/o", cfg.other, Constraint::Length(7)),
-            Column::new(" %busy", true, Constraint::Length(7)),
-            Column::new("Name", true, Constraint::Min(10)),
+            Column::new("Queue depth", "L(q)", cb.qd(),
+                        Constraint::Length(5)),
+            Column::new("IOPs", " ops/s", cb.ops_s(),
+                        Constraint::Length(7)),
+            Column::new("Read IOPs", "   r/s", cb.r_s(),
+                        Constraint::Length(7)),
+            Column::new("Read size", "kB/r", cb.kb_r(),
+                        Constraint::Length(5)),
+            Column::new("Read throughput", "kB/s r", cb.kbs_r(),
+                        Constraint::Length(7)),
+            Column::new("Read latency", "  ms/r", cb.ms_r(),
+                        Constraint::Length(7)),
+            Column::new("Write IOPs", "   w/s", cb.w_s(),
+                        Constraint::Length(7)),
+            Column::new("Write size", "kB/w", cb.kb_w(),
+                        Constraint::Length(5)),
+            Column::new("Write throughput", "kB/s w", cb.kbs_w(),
+                        Constraint::Length(7)),
+            Column::new("Write latency", "  ms/w", cb.ms_w(),
+                        Constraint::Length(7)),
+            Column::new("Delete IOPs", "   d/s", cb.d_s(),
+                        Constraint::Length(7)),
+            Column::new("Delete size", "kB/d", cb.kb_d(),
+                        Constraint::Length(5)),
+            Column::new("Delete throughput", "kB/s d", cb.kbs_d(),
+                        Constraint::Length(7)),
+            Column::new("Delete latency", "  ms/d", cb.ms_d(),
+                        Constraint::Length(7)),
+            Column::new("Other IOPs", "   o/s", cb.o_s(),
+                        Constraint::Length(7)),
+            Column::new("Other latency", "  ms/o", cb.ms_o(),
+                        Constraint::Length(7)),
+            Column::new("Percent busy", " %busy", cb.pct_busy(),
+                        Constraint::Length(7)),
+            Column::new("Name", "Name", cb.name(),
+                        Constraint::Min(10)),
         ];
-        Columns {cols}
+        let state = Default::default();
+        Columns {cols, state}
+    }
+
+    // This value is "defined" by the unit test of the same name.
+    pub const fn max_name_width(&self) -> u16 {
+        17
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.cols.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.cols.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
     }
 }
 
@@ -257,7 +405,7 @@ impl Element {
     }
 
     fn row(&self, columns: &Columns) -> Row {
-        let mut cells = Vec::with_capacity(Columns::MAX);
+        let mut cells = Vec::with_capacity(Columns::LEN);
         if columns.cols[Columns::QD].enabled {
             cells.push(Cell::from(format!("{:>4}", self.qd)));
         }
@@ -329,41 +477,85 @@ impl Element {
     }
 }
 
-#[derive(Debug, Default)]
 struct DataSource {
-    items: Vec<Element>
-}
-
-pub struct StatefulTable {
     prev: Option<Snapshot>,
     cur: Snapshot,
     tree: Tree,
-    state: TableState,
-    data: DataSource
+    items: Vec<Element>
 }
 
-impl StatefulTable {
-    fn new() -> io::Result<StatefulTable>
-    {
+impl DataSource {
+    fn new() -> io::Result<DataSource> {
         let tree = Tree::new()?;
         let prev = None;
         // XXX difference from gstat: the first display will show stats since
         // boot, like iostat.
         let cur = Snapshot::new()?;
-        let mut table = StatefulTable {
-            prev,
-            cur,
-            tree,
-            state: TableState::default(),
-            data: DataSource::default(),
-        };
-        table.regen()?;
-        Ok(table)
+        let items = Default::default();
+        Ok(
+            DataSource {
+                prev,
+                cur,
+                tree,
+                items
+            }
+        )
     }
+
+    pub fn refresh(&mut self) -> io::Result<()>
+    {
+        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
+        self.regen()?;
+        Ok(())
+    }
+
+    /// Regenerate the data from geom
+    fn regen(&mut self) -> io::Result<()>
+    {
+        let etime = if let Some(prev) = self.prev.as_mut() {
+            f64::from(self.cur.timestamp() - prev.timestamp())
+        } else {
+            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
+            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
+        };
+        self.items.clear();
+        for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
+            if let Some(gident) = self.tree.lookup(curstat.id()) {
+                if let Some(rank) = gident.rank() {
+                    let stats = Statistics::compute(curstat, prevstat, etime);
+                    let elem = Element::new(&gident.name().to_string_lossy(),
+                        rank, &stats);
+                    self.items.push(elem);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn sort(&mut self, sort_idx: Option<usize>, reverse: bool) {
+        if let Some(k) = sort_idx {
+            self.items.sort_by(|l, r| {
+                if reverse {
+                    r.partial_cmp_by(k, l)
+                } else {
+                    l.partial_cmp_by(k, r)
+                }.unwrap()
+            });
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct StatefulTable {
+    state: TableState,
+    len: usize
+}
+
+impl StatefulTable {
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.data.items.len() - 1 {
+                if i >= self.len - 1 {
                     0
                 } else {
                     i + 1
@@ -378,7 +570,7 @@ impl StatefulTable {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.data.items.len() - 1
+                    self.len - 1
                 } else {
                     i - 1
                 }
@@ -388,46 +580,16 @@ impl StatefulTable {
         self.state.select(Some(i));
     }
 
-    pub fn refresh(&mut self) -> io::Result<()>
+    pub fn table<'a>(&mut self, header: Row<'a>, rows: Vec<Row<'a>>, widths: &'a[Constraint])
+        -> Table<'a>
     {
-        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
-        self.regen()?;
-        Ok(())
-    }
-
-    /// Regenerate the DataSource
-    fn regen(&mut self) -> io::Result<()>
-    {
-        let etime = if let Some(prev) = self.prev.as_mut() {
-            f64::from(self.cur.timestamp() - prev.timestamp())
-        } else {
-            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
-            boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
-        };
-        self.data.items.clear();
-        for (curstat, prevstat) in self.cur.iter_pair(self.prev.as_mut()) {
-            if let Some(gident) = self.tree.lookup(curstat.id()) {
-                if let Some(rank) = gident.rank() {
-                    let stats = Statistics::compute(curstat, prevstat, etime);
-                    let elem = Element::new(&gident.name().to_string_lossy(),
-                        rank, &stats);
-                    self.data.items.push(elem);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn sort(&mut self, sort_idx: Option<usize>, reverse: bool) {
-        if let Some(k) = sort_idx {
-            self.data.items.sort_by(|l, r| {
-                if reverse {
-                    r.partial_cmp_by(k, l)
-                } else {
-                    l.partial_cmp_by(k, r)
-                }.unwrap()
-            });
-        }
+        let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+        self.len = rows.len();
+        Table::new(rows)
+            .header(header)
+            .block(Block::default())
+            .highlight_style(selected_style)
+            .widths(widths)
     }
 }
 
@@ -453,8 +615,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut editting_regex = false;
     let mut new_regex = String::new();
     let mut paused = false;
+    let mut selecting_columns = false;
 
-    let mut columns = Columns::new(&cfg);
+    let mut columns = Columns::new(&mut cfg);
 
     let mut sort_idx: Option<usize> = cfg.sort.as_ref()
         .map(|name| columns.cols.iter()
@@ -473,18 +636,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();
     let mut events = Events::new(stdin);
 
-    let mut table = StatefulTable::new()?;
-    table.sort(sort_idx, cfg.reverse);
+    let mut data = DataSource::new()?;
+    let mut table = StatefulTable::default();
+    data.sort(sort_idx, cfg.reverse);
 
     let normal_style = Style::default().bg(Color::Blue);
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
     loop {
         terminal.draw(|f| {
-            let rects = Layout::default()
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .split(f.size());
-
             let header_cells = columns.cols.iter()
                 .enumerate()
                 .filter(|(_i, col)| col.enabled)
@@ -500,7 +659,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                 });
             let header = Row::new(header_cells)
                 .style(normal_style);
-            let rows = table.data.items.iter()
+            let widths = columns.cols.iter()
+                .filter(|col| col.enabled)
+                .map(|col| col.width)
+                .collect::<Vec<_>>();
+            let twidth: u16 = columns.cols.iter()
+                .filter(|col| col.enabled)
+                .map(|col| col.min_width())
+                .sum();
+            let ntables = NonZeroU16::new(f.size().width / twidth)
+                .unwrap_or_else(|| NonZeroU16::new(1).unwrap());
+            let rects = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(
+                    (0..ntables.into())
+                    .map(|_| Constraint::Percentage(100 / u16::from(ntables)))
+                    .collect::<Vec<_>>()
+                ).split(f.size());
+            let multirows = data.items.iter()
                 .filter(|elem| !cfg.auto || elem.pct_busy > 0.1)
                 .filter(|elem| !cfg.physical || elem.rank == 1)
                 .filter(|elem|
@@ -509,20 +685,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .unwrap_or(true)
                 ).map(|elem| {
                     elem.row(&columns)
-                });
-            let widths = columns.cols.iter()
-                .filter(|col| col.enabled)
-                .map(|col| col.width)
-                .collect::<Vec<_>>();
-            let t = Table::new(rows)
-                .header(header)
-                .block(Block::default())
-                .highlight_style(selected_style)
-                .widths(&widths[..]);
-            f.render_stateful_widget(t, rects[0], &mut table.state);
+                }).deinterleave::<Vec<_>>(ntables.into());
+            for (i, rows) in multirows.into_iter().enumerate() {
+                let t = table.table(header.clone(), rows, &widths);
+                f.render_stateful_widget(t, rects[i], &mut table.state);
+            }
 
             if editting_regex {
-                let area = popup_layout(60, f.size());
+                let area = popup_layout(40, 3, f.size());
                 let popup_box = Paragraph::new(new_regex.as_ref())
                     .block(
                         Block::default()
@@ -531,14 +701,39 @@ fn main() -> Result<(), Box<dyn Error>> {
                     );
                 f.render_widget(Clear, area);
                 f.render_widget(popup_box, area);
+            } else if selecting_columns {
+                let boxwidth = columns.max_name_width() + 6;
+                let area = popup_layout(boxwidth, 20, f.size());
+                f.render_widget(Clear, area);
+                let items = columns.cols.iter()
+                    .map(|c| {
+                        let text = if c.enabled {
+                            format!("[x] {}", c.name)
+                        } else {
+                            format!("[ ] {}", c.name)
+                        };
+                        ListItem::new(Text::from(text))
+                    })
+                    .collect::<Vec<_>>();
+
+                let list = List::new(items)
+                    .block(
+                        Block::default()
+                        .borders(Borders::ALL)
+                        .title("Select columns")
+                    ).highlight_style(
+                        Style::default()
+                        .add_modifier(Modifier::REVERSED)
+                    );
+                f.render_stateful_widget(list, area, &mut columns.state);
             }
         }).unwrap();
 
         match events.poll(&tick_rate) {
             Some(Event::Tick) => {
                 if !paused {
-                    table.refresh()?;
-                    table.sort(sort_idx, cfg.reverse);
+                    data.refresh()?;
+                    data.sort(sort_idx, cfg.reverse);
                 }
             }
             Some(Event::Key(key)) => {
@@ -560,44 +755,59 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         _ => {}
                     }
+                } else if selecting_columns {
+                    match key {
+                        Key::Char(' ') => {
+                            if let Some(i) = columns.state.selected() {
+                                // unwrapping is safe; the default value should
+                                // always be set by this point.
+                                cfg.columns.as_mut().unwrap().0 ^= 1 << i;
+                                columns.cols[i].enabled ^= true;
+                            }
+                        }
+                        Key::Down => {
+                            columns.next();
+                        }
+                        Key::Up => {
+                            columns.previous();
+                        }
+                        Key::Esc => {
+                            selecting_columns = false;
+                        }
+                        _ => {}
+                    }
                 } else {
                     match key {
                         Key::Char(' ') => {
                             paused ^= true;
                             if !paused {
                                 // Refresh immediately after unpause.
-                                table.refresh()?;
-                                table.sort(sort_idx, cfg.reverse);
+                                data.refresh()?;
+                                data.sort(sort_idx, cfg.reverse);
                             }
                         }
-                        Key::Char('<') => {
-                            tick_rate /= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
-                        }
-                        Key::Char('>') => {
-                            tick_rate *= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
-                        }
-                        Key::Char('a') => {
-                            cfg.auto ^= true;
-                        }
-                        Key::Char('d') => {
-                            cfg.delete ^= true;
-                            columns.cols[Columns::D_S].enabled = cfg.delete;
-                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
-                            columns.cols[Columns::KBS_D].enabled = cfg.delete;
-                            columns.cols[Columns::MS_D].enabled = cfg.delete;
-                        }
-                        Key::Char('o') => {
-                            cfg.other ^= true;
-                            columns.cols[Columns::O_S].enabled = cfg.other;
-                            columns.cols[Columns::MS_O].enabled = cfg.other;
+                        Key::Char('+') => {
+                            loop {
+                                match sort_idx {
+                                    Some(idx) => {sort_idx = Some(idx + 1);}
+                                    None => {sort_idx = Some(0);}
+                                }
+                                let idx = sort_idx.unwrap();
+                                if idx >= columns.cols.len() {
+                                    sort_idx = None;
+                                    break;
+                                }
+                                if columns.cols[idx].enabled {
+                                    sort_idx = Some(idx);
+                                    break;
+                                }
+                            }
+                            let sort_key = sort_idx
+                                .map(|idx| columns.cols[idx].header);
+                            cfg.sort = sort_key.map(str::to_owned);
+                            data.sort(sort_idx, cfg.reverse);
                         }
                         Key::Char('-') => {
-                            // Ideally this would be 'O' to mimic top's
-                            // behavior.  But 'o' is already taken in gstat.
                             loop {
                                 match sort_idx {
                                     Some(idx) => {
@@ -617,51 +827,31 @@ fn main() -> Result<(), Box<dyn Error>> {
                             let sort_key = sort_idx
                                 .map(|idx| columns.cols[idx].header);
                             cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_idx, cfg.reverse);
+                            data.sort(sort_idx, cfg.reverse);
                         }
-                        Key::Char('+') => {
-                            // Ideally this would be 'o' to match top's
-                            // behavior.  But 'o' is already taken in gstat.
-                            loop {
-                                match sort_idx {
-                                    Some(idx) => {sort_idx = Some(idx + 1);}
-                                    None => {sort_idx = Some(0);}
-                                }
-                                let idx = sort_idx.unwrap();
-                                if idx >= columns.cols.len() {
-                                    sort_idx = None;
-                                    break;
-                                }
-                                if columns.cols[idx].enabled {
-                                    sort_idx = Some(idx);
-                                    break;
-                                }
-                            }
-                            let sort_key = sort_idx
-                                .map(|idx| columns.cols[idx].header);
-                            cfg.sort = sort_key.map(str::to_owned);
-                            table.sort(sort_idx, cfg.reverse);
+                        Key::Char('<') => {
+                            tick_rate /= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
                         }
-                        Key::Char('p') => {
-                            cfg.physical ^= true;
-                        }
-                        Key::Char('r') => {
-                            cfg.reverse ^= true;
-                            table.sort(sort_idx, cfg.reverse);
-                        }
-                        Key::Char('s') => {
-                            cfg.size ^= true;
-                            columns.cols[Columns::KB_R].enabled = cfg.size;
-                            columns.cols[Columns::KB_W].enabled = cfg.size;
-                            columns.cols[Columns::KB_D].enabled = cfg.delete && cfg.size;
+                        Key::Char('>') => {
+                            tick_rate *= 2;
+                            let s = tick_rate.as_micros().to_string();
+                            cfg.interval = Some(s);
                         }
                         Key::Char('F') => {
                             cfg.filter = None;
                             filter = None;
                         }
+                        Key::Char('a') => {
+                            cfg.auto ^= true;
+                        }
                         Key::Char('f') => {
                             editting_regex = true;
                             new_regex = String::new();
+                        }
+                        Key::Char('p') => {
+                            cfg.physical ^= true;
                         }
                         Key::Char('q') => {
                             if let Err(e) = confy::store("gstat-rs", &cfg) {
@@ -669,11 +859,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                             }
                             break;
                         }
+                        Key::Char('r') => {
+                            cfg.reverse ^= true;
+                            data.sort(sort_idx, cfg.reverse);
+                        }
                         Key::Down => {
                             table.next();
                         }
                         Key::Up => {
                             table.previous();
+                        }
+                        Key::Delete => {
+                            // TODO: persist this change, and make it reversible.
+                            if let Some(idx) = sort_idx {
+                                columns.cols[idx].enabled = false;
+                            }
+                        }
+                        Key::Insert => {
+                            selecting_columns = true;
                         }
                         _ => {}
                     }
@@ -690,4 +893,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod t {
+    use super::*;
+
+    #[test]
+    fn max_name_width() {
+        let mut cfg = Cli::default();
+        let columns = Columns::new(&mut cfg);
+        let expected = columns.cols.iter()
+            .map(|col| col.name.len())
+            .max()
+            .unwrap();
+        assert_eq!(expected, usize::from(columns.max_name_width()));
+    }
 }
