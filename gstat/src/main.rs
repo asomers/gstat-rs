@@ -1,5 +1,6 @@
 mod util;
 
+use bitfield::bitfield;
 use crate::util::{
     event::{Event, Events},
     iter::IteratorExt
@@ -16,6 +17,7 @@ use std::{
     mem,
     num::NonZeroU16,
     ops::BitOrAssign,
+    str::FromStr,
     time::Duration
 };
 use termion::{
@@ -63,7 +65,6 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-
 /// Drop-in compatible gstat(8) replacement
 // TODO: shorten the help options so they fit on 80 columns.
 #[derive(Debug, Default, Deserialize, Options, Serialize)]
@@ -102,7 +103,13 @@ struct Cli {
     #[options(short = 'r')]
     reverse: bool,
     /// Sort by the named column.  The name should match the column header.
-    sort: Option<String>
+    sort: Option<String>,
+    /// Bitfield of columns to enable
+    // TODO: hide this from the CLI, either using
+    // https://github.com/murarth/gumdrop/issues/52
+    // or by switching to structopt
+    #[serde(default = "default_columns_enabled")]
+    columns: Option<ColumnsEnabled>,
 }
 
 impl BitOrAssign for Cli {
@@ -118,6 +125,7 @@ impl BitOrAssign for Cli {
         self.physical |= rhs.physical;
         self.reverse |= rhs.reverse;
         self.sort = rhs.sort.or(self.sort.take());
+        self.columns = rhs.columns.or(self.columns.take());
     }
 }
 
@@ -148,8 +156,50 @@ impl Column {
     }
 }
 
+bitfield!{
+    #[derive(Clone, Copy, Deserialize, Serialize)]
+    pub struct ColumnsEnabled(u32);
+    impl Debug;
+    u32; qd, set_qd: 0;
+    u32; ops_s, set_ops_s: 1;
+    u32; r_s, set_r_s: 2;
+    u32; kb_r, set_kb_r: 3;
+    u32; kbs_r, set_kbs_r: 4;
+    u32; ms_r, set_ms_r: 5;
+    u32; w_s, set_w_s: 6;
+    u32; kb_w, set_kb_w: 7;
+    u32; kbs_w, set_kbs_w: 8;
+    u32; ms_w, set_ms_w: 9;
+    u32; d_s, set_d_s: 10;
+    u32; kb_d, set_kb_d: 11;
+    u32; kbs_d, set_kbs_d: 12;
+    u32; ms_d, set_ms_d: 13;
+    u32; o_s, set_o_s: 14;
+    u32; ms_o, set_ms_o: 15;
+    u32; pct_busy, set_pct_busy: 16;
+    u32; name, set_name: 17;
+}
+
+impl Default for ColumnsEnabled {
+    fn default() -> Self {
+        ColumnsEnabled(Columns::DEFAULT_ENABLED)
+    }
+}
+
+fn default_columns_enabled() -> Option<ColumnsEnabled> {
+    Some(Default::default())
+}
+
+// TODO: remove this impl.  It only exists because gumdrop can't skip a field.
+impl FromStr for ColumnsEnabled {
+    type Err = io::Error;
+    fn from_str(_s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::default())
+    }
+}
+
 struct Columns {
-    cols: [Column; Columns::MAX],
+    cols: [Column; Columns::LEN],
     state: ListState
 }
 
@@ -172,41 +222,78 @@ impl Columns {
     const MS_O: usize = 15;
     const PCT_BUSY: usize = 16;
     const NAME: usize = 17;
-    const MAX: usize = 18;
+    const LEN: usize = 18;
+    const DEFAULT_ENABLED: u32 = 0x30377;
 
-    fn new(cfg: &Cli) -> Self {
+    fn new(cfg: &mut Cli) -> Self {
+        let mut cb = match cfg.columns {
+            Some(cb) => cb,
+            None => {
+                // Can only happen when using --reset-config
+                cfg.columns = Some(ColumnsEnabled(Self::DEFAULT_ENABLED));
+                cfg.columns.unwrap()
+            }
+        };
+        // Apply the -ods switches, for legacy compatibility
+        if cfg.delete {
+            cb.set_d_s(true);
+            cb.set_kbs_d(true);
+            cb.set_ms_d(true);
+        }
+        if cfg.other {
+            cb.set_o_s(true);
+            cb.set_ms_o(true);
+        }
+        if cfg.delete && cfg.size {
+            cb.set_kb_d(true);
+        }
+        if cfg.size {
+            cb.set_kb_r(true);
+            cb.set_kb_w(true);
+        }
         let cols = [
-            Column::new("Queue depth", "L(q)", true, Constraint::Length(5)),
-            Column::new("IOPs", " ops/s", true, Constraint::Length(7)),
-            Column::new("Read IOPs", "   r/s", true, Constraint::Length(7)),
-            Column::new("Read size", "kB/r", cfg.size, Constraint::Length(5)),
-            Column::new("Read throughput", "kB/s r", true,
-                        Constraint::Length(7)),
-            Column::new("Read latency", "  ms/r", true, Constraint::Length(7)),
-            Column::new("Write IOPs", "   w/s", true, Constraint::Length(7)),
-            Column::new("Write size", "kB/w", cfg.size, Constraint::Length(5)),
-            Column::new("Write throughput", "kB/s w", true,
-                        Constraint::Length(7)),
-            Column::new("Write latency", "  ms/w", true, Constraint::Length(7)),
-            Column::new("Delete IOPs", "   d/s", cfg.delete,
-                        Constraint::Length(7)),
-            Column::new("Delete size", "kB/d", cfg.size && cfg.delete,
+            Column::new("Queue depth", "L(q)", cb.qd(),
                         Constraint::Length(5)),
-            Column::new("Delete throughput", "kB/s d", cfg.delete,
+            Column::new("IOPs", " ops/s", cb.ops_s(),
                         Constraint::Length(7)),
-            Column::new("Delete latency", "  ms/d", cfg.delete,
+            Column::new("Read IOPs", "   r/s", cb.r_s(),
                         Constraint::Length(7)),
-            Column::new("Other IOPs", "   o/s", cfg.other,
+            Column::new("Read size", "kB/r", cb.kb_r(),
+                        Constraint::Length(5)),
+            Column::new("Read throughput", "kB/s r", cb.kbs_r(),
                         Constraint::Length(7)),
-            Column::new("Other latency", "  ms/o", cfg.other,
+            Column::new("Read latency", "  ms/r", cb.ms_r(),
                         Constraint::Length(7)),
-            Column::new("Percent busy", " %busy", true, Constraint::Length(7)),
-            Column::new("Name", "Name", true, Constraint::Min(10)),
+            Column::new("Write IOPs", "   w/s", cb.w_s(),
+                        Constraint::Length(7)),
+            Column::new("Write size", "kB/w", cb.kb_w(),
+                        Constraint::Length(5)),
+            Column::new("Write throughput", "kB/s w", cb.kbs_w(),
+                        Constraint::Length(7)),
+            Column::new("Write latency", "  ms/w", cb.ms_w(),
+                        Constraint::Length(7)),
+            Column::new("Delete IOPs", "   d/s", cb.d_s(),
+                        Constraint::Length(7)),
+            Column::new("Delete size", "kB/d", cb.kb_d(),
+                        Constraint::Length(5)),
+            Column::new("Delete throughput", "kB/s d", cb.kbs_d(),
+                        Constraint::Length(7)),
+            Column::new("Delete latency", "  ms/d", cb.ms_d(),
+                        Constraint::Length(7)),
+            Column::new("Other IOPs", "   o/s", cb.o_s(),
+                        Constraint::Length(7)),
+            Column::new("Other latency", "  ms/o", cb.ms_o(),
+                        Constraint::Length(7)),
+            Column::new("Percent busy", " %busy", cb.pct_busy(),
+                        Constraint::Length(7)),
+            Column::new("Name", "Name", cb.name(),
+                        Constraint::Min(10)),
         ];
         let state = Default::default();
         Columns {cols, state}
     }
 
+    // This value is "defined" by the unit test of the same name.
     pub const fn max_name_width(&self) -> u16 {
         17
     }
@@ -317,7 +404,7 @@ impl Element {
     }
 
     fn row(&self, columns: &Columns) -> Row {
-        let mut cells = Vec::with_capacity(Columns::MAX);
+        let mut cells = Vec::with_capacity(Columns::LEN);
         if columns.cols[Columns::QD].enabled {
             cells.push(Cell::from(format!("{:>4}", self.qd)));
         }
@@ -529,7 +616,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut paused = false;
     let mut selecting_columns = false;
 
-    let mut columns = Columns::new(&cfg);
+    let mut columns = Columns::new(&mut cfg);
 
     let mut sort_idx: Option<usize> = cfg.sort.as_ref()
         .map(|name| columns.cols.iter()
@@ -671,6 +758,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     match key {
                         Key::Char(' ') => {
                             if let Some(i) = columns.state.selected() {
+                                // unwrapping is safe; the default value should
+                                // always be set by this point.
+                                cfg.columns.as_mut().unwrap().0 ^= 1 << i;
                                 columns.cols[i].enabled ^= true;
                             }
                         }
@@ -832,8 +922,8 @@ mod t {
 
     #[test]
     fn max_name_width() {
-        let cfg = Cli::default();
-        let columns = Columns::new(&cfg);
+        let mut cfg = Cli::default();
+        let columns = Columns::new(&mut cfg);
         let expected = columns.cols.iter()
             .map(|col| col.name.len())
             .max()
