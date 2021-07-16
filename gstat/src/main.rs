@@ -289,7 +289,8 @@ impl Columns {
             Column::new("Name", "Name", cb.name(),
                         Constraint::Min(10)),
         ];
-        let state = Default::default();
+        let mut state = ListState::default();
+        state.select(Some(0));
         Columns {cols, state}
     }
 
@@ -299,30 +300,13 @@ impl Columns {
     }
 
     pub fn next(&mut self) {
-        let s = match self.state.selected() {
-            Some(i) => {
-                if i >= self.cols.len() - 1 {
-                    None
-                } else {
-                    Some(i + 1)
-                }
-            }
-            None => Some(0),
-        };
+        let s = Some((self.state.selected().unwrap() + 1) % self.cols.len());
         self.state.select(s);
     }
 
     pub fn previous(&mut self) {
-        let s = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    None
-                } else {
-                    Some(i - 1)
-                }
-            }
-            None => Some(self.cols.len() - 1),
-        };
+        let old = self.state.selected().unwrap() as isize;
+        let s = Some((old - 1).rem_euclid(self.cols.len() as isize) as usize);
         self.state.select(s);
     }
 }
@@ -906,15 +890,43 @@ fn main() -> Result<(), Box<dyn Error>> {
 mod t {
     use super::*;
 
-    #[test]
-    fn max_name_width() {
-        let mut cfg = Cli::default();
-        let columns = Columns::new(&mut cfg);
-        let expected = columns.cols.iter()
-            .map(|col| col.name.len())
-            .max()
-            .unwrap();
-        assert_eq!(expected, usize::from(columns.max_name_width()));
+    mod columns {
+        use super::*;
+
+        #[test]
+        fn max_name_width() {
+            let mut cfg = Cli::default();
+            let columns = Columns::new(&mut cfg);
+            let expected = columns.cols.iter()
+                .map(|col| col.name.len())
+                .max()
+                .unwrap();
+            assert_eq!(expected, usize::from(columns.max_name_width()));
+        }
+
+        /// Unlike TableState, it makes no sense for the ColumnSelector to have
+        /// no row selected.  So wrap from end to beginning, skipping None.
+        #[test]
+        fn next() {
+            let mut cfg = Cli::default();
+            let mut columns = Columns::new(&mut cfg);
+            assert_eq!(columns.state.selected(), Some(0));
+            for _ in 0..(columns.cols.len() - 1) { columns.next(); }
+            assert_eq!(columns.state.selected(), Some(columns.cols.len() - 1));
+            columns.next();
+            assert_eq!(columns.state.selected(), Some(0));
+        }
+
+        #[test]
+        fn previous() {
+            let mut cfg = Cli::default();
+            let mut columns = Columns::new(&mut cfg);
+            assert_eq!(columns.state.selected(), Some(0));
+            columns.previous();
+            assert_eq!(columns.state.selected(), Some(columns.cols.len() - 1));
+            for _ in 0..(columns.cols.len() - 1) { columns.previous(); }
+            assert_eq!(columns.state.selected(), Some(0));
+        }
     }
 
     mod stateful_table {
