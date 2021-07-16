@@ -63,3 +63,16 @@ task:
     - cargo update -Zminimal-versions
     - cargo check --all-targets
   before_cache_script: rm -rf $HOME/.cargo/registry/index
+
+# Ensure that the docs can be cross-compiled, as Cirrus does.
+task:
+  name: Cross docs
+  container:
+    image: rustlang/rust:nightly
+  cargo_cache:
+    folder: $HOME/.cargo/registry
+    fingerprint_script: cat Cargo.lock || echo ""
+  doc_script:
+    - rustup target add x86_64-unknown-freebsd
+    - cargo doc --target x86_64-unknown-freebsd --no-deps -p freebsd-libgeom-sys -p freebsd-libgeom
+  before_cache_script: rm -rf $HOME/.cargo/registry/index
