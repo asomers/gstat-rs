@@ -299,31 +299,31 @@ impl Columns {
     }
 
     pub fn next(&mut self) {
-        let i = match self.state.selected() {
+        let s = match self.state.selected() {
             Some(i) => {
                 if i >= self.cols.len() - 1 {
-                    0
+                    None
                 } else {
-                    i + 1
+                    Some(i + 1)
                 }
             }
-            None => 0,
+            None => Some(0),
         };
-        self.state.select(Some(i));
+        self.state.select(s);
     }
 
     pub fn previous(&mut self) {
-        let i = match self.state.selected() {
+        let s = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.cols.len() - 1
+                    None
                 } else {
-                    i - 1
+                    Some(i - 1)
                 }
             }
-            None => 0,
+            None => Some(self.cols.len() - 1),
         };
-        self.state.select(Some(i));
+        self.state.select(s);
     }
 }
 
@@ -552,31 +552,31 @@ pub struct StatefulTable {
 
 impl StatefulTable {
     pub fn next(&mut self) {
-        let i = match self.state.selected() {
+        let s = match self.state.selected() {
             Some(i) => {
                 if i >= self.len - 1 {
-                    0
+                    None
                 } else {
-                    i + 1
+                    Some(i + 1)
                 }
             }
-            None => 0,
+            None => Some(0),
         };
-        self.state.select(Some(i));
+        self.state.select(s);
     }
 
     pub fn previous(&mut self) {
-        let i = match self.state.selected() {
+        let s = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.len - 1
+                    None
                 } else {
-                    i - 1
+                    Some(i - 1)
                 }
             }
-            None => 0,
+            None => Some(self.len - 1),
         };
-        self.state.select(Some(i));
+        self.state.select(s);
     }
 
     pub fn table<'a>(&mut self, header: Row<'a>, rows: Vec<Row<'a>>, widths: &'a[Constraint])
