@@ -764,6 +764,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 columns.cols[i].enabled ^= true;
                             }
                         }
+                        Key::Char('q') => {
+                            if let Err(e) = confy::store("gstat-rs", &cfg) {
+                                eprintln!("Warning: failed to save config file: {}", e);
+                            }
+                            break;
+                        }
                         Key::Down => {
                             columns.next();
                         }
