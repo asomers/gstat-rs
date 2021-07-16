@@ -24,7 +24,6 @@ use termion::{
     event::Key,
     input::MouseTerminal,
     raw::IntoRawMode,
-    screen::AlternateScreen
 };
 use tui::{
     backend::TermionBackend,
@@ -629,7 +628,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Terminal initialization
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
     let backend = TermionBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -642,6 +640,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let normal_style = Style::default().bg(Color::Blue);
 
+    terminal.clear()?;
     loop {
         terminal.draw(|f| {
             let header_cells = columns.cols.iter()
