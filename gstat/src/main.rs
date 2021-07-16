@@ -492,14 +492,14 @@ impl DataSource {
         // boot, like iostat.
         let cur = Snapshot::new()?;
         let items = Default::default();
-        Ok(
-            DataSource {
-                prev,
-                cur,
-                tree,
-                items
-            }
-        )
+        let mut ds = DataSource {
+            prev,
+            cur,
+            tree,
+            items
+        };
+        ds.regen()?;
+        Ok(ds)
     }
 
     pub fn refresh(&mut self) -> io::Result<()>
