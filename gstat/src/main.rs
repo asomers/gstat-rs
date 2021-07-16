@@ -554,13 +554,17 @@ impl StatefulTable {
     pub fn next(&mut self) {
         let s = match self.state.selected() {
             Some(i) => {
-                if i >= self.len - 1 {
+                if i >= self.len.saturating_sub(1) {
                     None
                 } else {
                     Some(i + 1)
                 }
             }
-            None => Some(0),
+            None => if self.len > 0 {
+                Some(0)
+            } else {
+                None
+            }
         };
         self.state.select(s);
     }
@@ -574,7 +578,7 @@ impl StatefulTable {
                     Some(i - 1)
                 }
             }
-            None => Some(self.len - 1),
+            None => self.len.checked_sub(1),
         };
         self.state.select(s);
     }
@@ -911,5 +915,56 @@ mod t {
             .max()
             .unwrap();
         assert_eq!(expected, usize::from(columns.max_name_width()));
+    }
+
+    mod stateful_table {
+        use super::*;
+
+        #[test]
+        fn next_empty() {
+            let mut t = StatefulTable::default();
+            assert_eq!(t.len, 0);
+            assert!(t.state.selected().is_none());
+            t.next();
+            assert!(t.state.selected().is_none());
+        }
+
+        #[test]
+        #[allow(clippy::field_reassign_with_default)]
+        fn next_nonempty() {
+            let mut t = StatefulTable::default();
+            t.len = 2;
+            assert!(t.state.selected().is_none());
+            t.next();
+            assert_eq!(t.state.selected(), Some(0));
+            t.next();
+            assert_eq!(t.state.selected(), Some(1));
+            t.next();
+            assert_eq!(t.state.selected(), None);
+        }
+
+        #[test]
+        fn previous_empty() {
+            let mut t = StatefulTable::default();
+            assert_eq!(t.len, 0);
+            assert!(t.state.selected().is_none());
+            t.previous();
+            assert!(t.state.selected().is_none());
+        }
+
+        #[test]
+        #[allow(clippy::field_reassign_with_default)]
+        fn previous_nonempty() {
+            let mut t = StatefulTable::default();
+            t.len = 2;
+            assert!(t.state.selected().is_none());
+            t.previous();
+            assert_eq!(t.state.selected(), Some(1));
+            t.previous();
+            assert_eq!(t.state.selected(), Some(0));
+            t.previous();
+            assert_eq!(t.state.selected(), None);
+        }
+
     }
 }
