@@ -43,9 +43,9 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Max((r.height - y)/2),
+                Constraint::Max(r.height.saturating_sub(y)/2),
                 Constraint::Length(y),
-                Constraint::Max((r.height - y)/2),
+                Constraint::Max(r.height.saturating_sub(y)/2),
             ]
             .as_ref(),
         )
@@ -55,9 +55,9 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Max((r.width - x) / 2),
+                Constraint::Max(r.width.saturating_sub(x) / 2),
                 Constraint::Length(x),
-                Constraint::Max((r.width - x) / 2),
+                Constraint::Max(r.width.saturating_sub(x) / 2),
             ]
             .as_ref(),
         )
