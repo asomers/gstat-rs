@@ -20,7 +20,7 @@ disable-tag = true
 disable-push = true
 
 [dependencies]
-freebsd-libgeom-sys = { version = "=0.1.0", path = "../freebsd-libgeom-sys" }
+freebsd-libgeom-sys = { version = "= 0.1.1", path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"
 
 [dev-dependencies]
