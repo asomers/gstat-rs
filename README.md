@@ -27,6 +27,7 @@ disks.  The key differences are:
 
 # Screenshot
 
+gstat-rs demonstrating side-by-side mode, sorting by %busy.
 ![Screenshot 1](https://raw.githubusercontent.com/asomers/gstat-rs/master/gstat/doc/demo.gif)
 
 # Minimum Supported Rust Version (MSRV)
