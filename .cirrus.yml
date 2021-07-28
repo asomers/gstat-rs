@@ -56,7 +56,7 @@ task:
     - cargo clippy --all-features --all-targets -- -D warnings
   # Test our minimal version spec
   minver_test_script:
-    # We can't check minver for gstat itself, since rustbox fails to build with
+    # We can't check minver for gstat itself, since confy fails to build with
     # its minium specified versions.  So just check freebsd-libgeom.
     - . $HOME/.cargo/env
     - cd freebsd-libgeom

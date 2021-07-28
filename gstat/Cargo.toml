@@ -26,11 +26,11 @@ pre-release-replacements = [
 bitfield = "0.13.2"
 confy = "0.4.0"
 freebsd-libgeom = { version = "= 0.1.1", path = "../freebsd-libgeom" }
-gumdrop = "0.8.0"
 humanize-rs = "0.1.5"
 nix = "0.22.0"
 serde = "1.0"
 serde_derive = "1.0"
+structopt = "0.3.22"
 termion = "1.5"
 tui = { version = "0.15.0", features = ["termion"] }
 

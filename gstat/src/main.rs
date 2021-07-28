@@ -5,7 +5,6 @@ use crate::util::{
     event::{Event, Events},
     iter::IteratorExt
 };
-use gumdrop::Options;
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{ClockId, clock_gettime};
 use regex::Regex;
@@ -20,6 +19,7 @@ use std::{
     str::FromStr,
     time::Duration
 };
+use structopt::StructOpt;
 use termion::{
     event::Key,
     input::MouseTerminal,
@@ -66,55 +66,62 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
 
 /// Drop-in replacement for gstat(8)
 // TODO: shorten the help options so they fit on 80 columns.
-#[derive(Debug, Default, Deserialize, Options, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, StructOpt)]
 struct Cli {
-    #[options(help = "print help message")]
-    help: bool,
-    /// only display providers that are at least 0.1% busy
-    #[options(short = 'a')]
+    /// Only display providers that are at least 0.1% busy
+    #[structopt(short = "a", long = "auto")]
     auto: bool,
-    /// display statistics for delete (BIO_DELETE) operations.
-    #[options(short = 'd')]
+    /// Display statistics for delete (BIO_DELETE) operations.
+    #[structopt(short = "d", long = "delete")]
     delete: bool,
-    /// only display devices with names matching filter, as a regex.
-    #[options(short = 'f')]
+    /// Only display devices with names matching filter, as a regex.
+    #[structopt(short = "f", long = "filter")]
     filter: Option<String>,
-    /// display statistics for other (BIO_FLUSH) operations.
-    #[options(short = 'o')]
+    /// Display statistics for other (BIO_FLUSH) operations.
+    #[structopt(short = "o", long = "other")]
     other: bool,
-    /// display block size statistics
-    #[options(short = 's')]
+    /// Display block size statistics
+    #[structopt(short = "s", long = "size")]
     size: bool,
-    /// display update interval, in microseconds or with the specified unit
-    #[options(short = 'I')]
-    // Note: argh has a "from_str_fn" property that could be used to create a
-    // custom parser, to parse interval directly to an int or a Duration.  That
-    // would make it easier to save the config file.  But gumpdrop doesn't have
-    // that option.
-    interval: Option<String>,
-    /// only display physical providers (those with rank of 1).
-    #[options(short = 'p')]
+    /// Only display physical providers (those with rank of 1).
+    #[structopt(short = "p", long = "physical")]
     physical: bool,
-    /// Reset the config file
+    /// Reset the config file to defaults
     #[serde(skip)]
+    #[structopt(long = "reset-config")]
     reset_config: bool,
     /// Reverse the sort
-    #[options(short = 'r')]
+    #[structopt(short = "r", long = "reverse")]
     reverse: bool,
     /// Sort by the named column.  The name should match the column header.
+    #[structopt(short = "S", long = "sort")]
     sort: Option<String>,
     /// Bitfield of columns to enable
-    // TODO: hide this from the CLI, either using
-    // https://github.com/murarth/gumdrop/issues/52
-    // or by switching to structopt
     #[serde(default = "default_columns_enabled")]
     columns: Option<ColumnsEnabled>,
+    /// Display update interval, in microseconds or with the specified unit
+    #[structopt(
+        short = "I",
+        long = "interval",
+        parse(try_from_str = Cli::duration_from_str)
+    )]
+    interval: Option<Duration>,
+}
+
+impl Cli {
+    fn duration_from_str(s: &str) -> Result<Duration, humanize_rs::ParseError> {
+        if let Ok(us) = s.parse::<u64>() {
+            // With no units, default to microseconds
+            Ok(Duration::from_micros(us))
+        } else {
+            humanize_rs::duration::parse(s)
+        }
+    }
 }
 
 impl BitOrAssign for Cli {
     #[allow(clippy::or_fun_call)]
     fn bitor_assign(&mut self, rhs: Self) {
-        self.help |= rhs.help;
         self.auto |= rhs.auto;
         self.delete |= rhs.delete;
         self.filter = rhs.filter.or(self.filter.take());
@@ -580,8 +587,10 @@ impl StatefulTable {
     }
 }
 
+// https://github.com/rust-lang/rust-clippy/issues/7483
+#[allow(clippy::or_fun_call)]
 fn main() -> Result<(), Box<dyn Error>> {
-    let cli: Cli = Cli::parse_args_default_or_exit();
+    let cli: Cli = Cli::from_args();
     let mut cfg: Cli = confy::load("gstat-rs")?;
     if cli.reset_config {
         cfg = cli;
@@ -589,16 +598,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         cfg |= cli;
     }
     let mut filter = cfg.filter.as_ref().map(|s| Regex::new(s).unwrap());
-    let mut tick_rate: Duration = match cfg.interval.as_mut() {
-        None => Duration::from_secs(1),
-        Some(s) => {
-            if s.parse::<i32>().is_ok() {
-                // Add the default units
-                s.push_str("us");
-            }
-            humanize_rs::duration::parse(s)?
-        }
-    };
+    let mut tick_rate = cfg.interval.unwrap_or(Duration::from_secs(1));
     let mut editting_regex = false;
     let mut new_regex = String::new();
     let mut paused = false;
@@ -821,13 +821,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                         Key::Char('<') => {
                             tick_rate /= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
+                            cfg.interval = Some(tick_rate);
                         }
                         Key::Char('>') => {
                             tick_rate *= 2;
-                            let s = tick_rate.as_micros().to_string();
-                            cfg.interval = Some(s);
+                            cfg.interval = Some(tick_rate);
                         }
                         Key::Char('F') => {
                             cfg.filter = None;
