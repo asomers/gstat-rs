@@ -513,8 +513,8 @@ impl DataSource {
             if let Some(gident) = self.tree.lookup(curstat.id()) {
                 if let Some(rank) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
-                    let elem = Element::new(&gident.name().to_string_lossy(),
-                        rank, &stats);
+                    let name = gident.name().unwrap().to_string_lossy();
+                    let elem = Element::new(&name, rank, &stats);
                     self.items.push(elem);
                 }
             }
