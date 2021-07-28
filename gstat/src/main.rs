@@ -591,12 +591,13 @@ impl StatefulTable {
 #[allow(clippy::or_fun_call)]
 fn main() -> Result<(), Box<dyn Error>> {
     let cli: Cli = Cli::from_args();
-    let mut cfg: Cli = confy::load("gstat-rs")?;
-    if cli.reset_config {
-        cfg = cli;
+    let mut cfg = if cli.reset_config {
+        cli
     } else {
+        let mut cfg: Cli = confy::load("gstat-rs")?;
         cfg |= cli;
-    }
+        cfg
+    };
     let mut filter = cfg.filter.as_ref().map(|s| Regex::new(s).unwrap());
     let mut tick_rate = cfg.interval.unwrap_or(Duration::from_secs(1));
     let mut editting_regex = false;
