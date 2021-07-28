@@ -9,7 +9,8 @@ use freebsd_libgeom_sys::*;
 use lazy_static::lazy_static;
 use std::{
     ffi::CStr,
-    io::{Error, Result},
+    fmt,
+    io::{self, Error},
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Sub,
@@ -112,7 +113,7 @@ macro_rules! ms_per_xfer {
 }
 
 lazy_static! {
-    static ref GEOM_STATS: Result<()> = {
+    static ref GEOM_STATS: io::Result<()> = {
         let r = unsafe { geom_stats_open() };
         if r != 0 {
             Err(Error::last_os_error())
@@ -139,6 +140,20 @@ impl<'a> Devstat<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub enum GidentError {
+    NotAProvider
+}
+
+impl fmt::Display for GidentError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GidentError::NotAProvider => {write!(f, "Not a GEOM provider")}
+        }
+    }
+}
+
 /// Identifies an element in the Geom [`Tree`]
 #[derive(Debug, Copy, Clone)]
 pub struct Gident<'a>{
@@ -155,23 +170,32 @@ impl<'a> Gident<'a> {
         unsafe{self.ident.as_ref()}.lg_what == gident_ISPROVIDER
     }
 
-    pub fn name(&self) -> &'a CStr {
-        unsafe{
-            let gprovider = self.ident.as_ref().lg_ptr as *const gprovider;
-            assert!(!gprovider.is_null());
-            CStr::from_ptr((*gprovider).lg_name)
+    pub fn name(&self) -> Result<&'a CStr, GidentError> {
+        if !self.is_provider() {
+            Err(GidentError::NotAProvider)
+        } else {
+            unsafe{
+                let gprovider = self.ident.as_ref().lg_ptr as *const gprovider;
+                assert!(!gprovider.is_null());
+                Ok(CStr::from_ptr((*gprovider).lg_name))
+            }
         }
     }
 
+    /// Return the GEOM provider rank of this device, if it is a provider.
     pub fn rank(&self) -> Option<u32> {
-        unsafe{
-            let gprovider = self.ident.as_ref().lg_ptr as *const gprovider;
-            assert!(!gprovider.is_null());
-            let geom = (*gprovider).lg_geom;
-            if geom.is_null() {
-                None
-            } else {
-                Some((*geom).lg_rank)
+        if !self.is_provider() {
+            None
+        } else {
+            unsafe{
+                let gprovider = self.ident.as_ref().lg_ptr as *const gprovider;
+                assert!(!gprovider.is_null());
+                let geom = (*gprovider).lg_geom;
+                if geom.is_null() {
+                    None
+                } else {
+                    Some((*geom).lg_rank)
+                }
             }
         }
     }
@@ -248,7 +272,7 @@ impl Snapshot {
     /// Acquires a new snapshot of the raw data from the kernel.
     ///
     /// Is not guaranteed to be completely atomic and consistent.
-    pub fn new() -> Result<Self> {
+    pub fn new() -> io::Result<Self> {
         GEOM_STATS.as_ref().unwrap();
         let raw = unsafe { geom_stats_snapshot_get() };
         NonNull::new(raw)
@@ -518,7 +542,7 @@ impl Tree {
     }
 
     /// Construct a new `Tree` representing all available geom providers
-    pub fn new() -> Result<Self> {
+    pub fn new() -> io::Result<Self> {
         let (inner, r) = unsafe {
             let mut inner = Box::pin(mem::zeroed());
             let r = geom_gettree(&mut *inner);

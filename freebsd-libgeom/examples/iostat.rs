@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 if let Some(1) = gident.rank() {
                     let stats = Statistics::compute(curstat, prevstat, etime);
                     println!("{:8} {:>7.0} {:>7.0} {:>8.1} {:>8.1} {:>5.0} {:>5.0} {:>5.0} {:>5.0} {:>4} {:>3.0}",
-                        gident.name().to_string_lossy(),
+                        gident.name().unwrap().to_string_lossy(),
                         stats.transfers_per_second_read(),
                         stats.transfers_per_second_write(),
                         stats.mb_per_second_read() * 1024.0,
