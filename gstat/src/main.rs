@@ -651,10 +651,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .filter(|col| col.enabled)
                 .map(|col| col.width)
                 .collect::<Vec<_>>();
+            let max_name_width = data.items.iter()
+                .filter(|elem| !cfg.auto || elem.pct_busy > 0.1)
+                .filter(|elem| !cfg.physical || elem.rank == 1)
+                .filter(|elem|
+                        filter.as_ref()
+                        .map(|f| f.is_match(&elem.name))
+                        .unwrap_or(true)
+                ).map(|elem| elem.name.len() as u16)
+                .max()
+                .unwrap_or(0);
             let twidth: u16 = columns.cols.iter()
                 .filter(|col| col.enabled)
-                .map(|col| col.min_width())
-                .sum();
+                .map(|col| {
+                    if col.name == "Name" {
+                        max_name_width
+                    } else {
+                        col.min_width()
+                    }
+                }).sum();
             let ntables = NonZeroU16::new(f.size().width / twidth)
                 .unwrap_or_else(|| NonZeroU16::new(1).unwrap());
             let rects = Layout::default()
@@ -671,9 +686,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                         filter.as_ref()
                         .map(|f| f.is_match(&elem.name))
                         .unwrap_or(true)
-                ).map(|elem| {
-                    elem.row(&columns)
-                }).deinterleave::<Vec<_>>(ntables.into());
+                ).map(|elem| elem.row(&columns))
+                .deinterleave::<Vec<_>>(ntables.into());
             for (i, rows) in multirows.into_iter().enumerate() {
                 let t = table.table(header.clone(), rows, &widths);
                 f.render_stateful_widget(t, rects[i], &mut table.state);
