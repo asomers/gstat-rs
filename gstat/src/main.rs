@@ -64,7 +64,6 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
 }
 
 /// Drop-in replacement for gstat(8)
-// TODO: shorten the help options so they fit on 80 columns.
 #[derive(Debug, Default, Deserialize, Serialize, StructOpt)]
 struct Cli {
     /// Only display providers that are at least 0.1% busy
