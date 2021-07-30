@@ -5,6 +5,7 @@ fn main() {
     use std::env;
     use std::path::PathBuf;
 
+    println!("cargo:rerun-if-env-changed=LLVM_CONFIG_PATH");
     println!("cargo:rustc-link-lib=geom");
     let bindings = bindgen::Builder::default()
         .header("/usr/include/libgeom.h")
