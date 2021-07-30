@@ -870,9 +870,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                             table.previous();
                         }
                         Key::Delete => {
-                            // TODO: persist this change, and make it reversible.
-                            if let Some(idx) = sort_idx {
-                                columns.cols[idx].enabled = false;
+                            if let Some(i) = sort_idx {
+                                cfg.columns.as_mut().unwrap().0 ^= 1 << i;
+                                columns.cols[i].enabled ^= true;
                             }
                         }
                         Key::Insert => {
