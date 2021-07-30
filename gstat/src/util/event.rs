@@ -44,7 +44,15 @@ impl<T: TermRead> Events<T> {
                 Some(Ok(event::Event::Key(key))) => Some(Event::Key(key)),
                 Some(Ok(event::Event::Mouse(mev))) => Some(Event::Mouse(mev)),
                 None => None,
-                e => panic!("Unhandled input {:?}", e)
+                Some(Ok(event::Event::Unsupported(_))) => {
+                    // Ignore unknown inputs.  This can be triggered by the
+                    // arrows keys after the terminal gets into a screwy state.
+                    None
+                }
+                Some(Err(e)) => {
+                    eprintln!("Error: reading from terminal returned {}", e);
+                    None
+                }
             }
         }
     }
