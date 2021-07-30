@@ -16,7 +16,6 @@ use std::{
     mem,
     num::NonZeroU16,
     ops::BitOrAssign,
-    str::FromStr,
     time::Duration
 };
 use structopt::StructOpt;
@@ -98,6 +97,7 @@ struct Cli {
     sort: Option<String>,
     /// Bitfield of columns to enable
     #[serde(default = "default_columns_enabled")]
+    #[structopt(skip)]
     columns: Option<ColumnsEnabled>,
     /// Display update interval, in microseconds or with the specified unit
     #[structopt(
@@ -194,14 +194,6 @@ impl Default for ColumnsEnabled {
 
 fn default_columns_enabled() -> Option<ColumnsEnabled> {
     Some(Default::default())
-}
-
-// TODO: remove this impl.  It only exists because gumdrop can't skip a field.
-impl FromStr for ColumnsEnabled {
-    type Err = io::Error;
-    fn from_str(_s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::default())
-    }
 }
 
 struct Columns {
