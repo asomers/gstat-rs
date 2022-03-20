@@ -446,7 +446,7 @@ impl<'a> Statistics<'a> {
     /// The percentage of time the device had one or more transactions
     /// outstanding between the acquisition of the two snapshots.
     pub fn busy_pct(&self) -> f64 {
-        let delta = delta_t!(&self.current, &self.previous,
+        let delta = delta_t!(self.current, &self.previous,
             |ds: &devstat| ds.busy_time);
         (delta / self.etime * 100.0).max(0.0)
     }

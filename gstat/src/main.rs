@@ -599,11 +599,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut columns = Columns::new(&mut cfg);
 
     let mut sort_idx: Option<usize> = cfg.sort.as_ref()
-        .map(|name| columns.cols.iter()
+        .and_then(|name| columns.cols.iter()
              .enumerate()
              .find(|(_i, col)| col.header.trim() == name.trim())
              .map(|(i, _col)| i)
-        ).flatten();
+        );
 
     // Terminal initialization
     let stdout = io::stdout().into_raw_mode()?;
