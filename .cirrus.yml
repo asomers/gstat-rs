@@ -51,6 +51,10 @@ task:
     - . $HOME/.cargo/env
     - rustup component add clippy
     - cargo clippy --all-features --all-targets -- -D warnings
+  audit_script:
+    - . $HOME/.cargo/env
+    - cargo install cargo-audit
+    - cargo audit
   # Test our minimal version spec
   minver_test_script:
     # We can't check minver for gstat itself, since confy fails to build with
