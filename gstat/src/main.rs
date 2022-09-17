@@ -1,6 +1,7 @@
 mod util;
 
 use bitfield::bitfield;
+use clap::Parser;
 use crate::util::{
     event::{Event, Events},
     iter::IteratorExt
@@ -18,7 +19,6 @@ use std::{
     ops::BitOrAssign,
     time::Duration
 };
-use structopt::StructOpt;
 use termion::{
     event::Key,
     input::MouseTerminal,
@@ -64,43 +64,43 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
 }
 
 /// Drop-in replacement for gstat(8)
-#[derive(Debug, Default, Deserialize, Serialize, StructOpt)]
+#[derive(Debug, Default, Deserialize, Serialize, clap::StructOpt)]
 struct Cli {
     /// Only display providers that are at least 0.1% busy
-    #[structopt(short = "a", long = "auto")]
+    #[clap(short = 'a', long = "auto")]
     auto: bool,
     /// Display statistics for delete (BIO_DELETE) operations.
-    #[structopt(short = "d", long = "delete")]
+    #[clap(short = 'd', long = "delete")]
     delete: bool,
     /// Only display devices with names matching filter, as a regex.
-    #[structopt(short = "f", long = "filter")]
+    #[clap(short = 'f', long = "filter")]
     filter: Option<String>,
     /// Display statistics for other (BIO_FLUSH) operations.
-    #[structopt(short = "o", long = "other")]
+    #[clap(short = 'o', long = "other")]
     other: bool,
     /// Display block size statistics
-    #[structopt(short = "s", long = "size")]
+    #[clap(short = 's', long = "size")]
     size: bool,
     /// Only display physical providers (those with rank of 1).
-    #[structopt(short = "p", long = "physical")]
+    #[clap(short = 'p', long = "physical")]
     physical: bool,
     /// Reset the config file to defaults
     #[serde(skip)]
-    #[structopt(long = "reset-config")]
+    #[clap(long = "reset-config")]
     reset_config: bool,
     /// Reverse the sort
-    #[structopt(short = "r", long = "reverse")]
+    #[clap(short = 'r', long = "reverse")]
     reverse: bool,
     /// Sort by the named column.  The name should match the column header.
-    #[structopt(short = "S", long = "sort")]
+    #[clap(short = 'S', long = "sort")]
     sort: Option<String>,
     /// Bitfield of columns to enable
     #[serde(default = "default_columns_enabled")]
-    #[structopt(skip)]
+    #[clap(skip)]
     columns: Option<ColumnsEnabled>,
     /// Display update interval, in microseconds or with the specified unit
-    #[structopt(
-        short = "I",
+    #[clap(
+        short = 'I',
         long = "interval",
         parse(try_from_str = Cli::duration_from_str)
     )]

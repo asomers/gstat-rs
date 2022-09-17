@@ -24,13 +24,13 @@ pre-release-replacements = [
 
 [dependencies]
 bitfield = "0.13.2"
+clap = { version = "3.0", features = ["derive"] }
 confy = "0.4.0"
 freebsd-libgeom = { version = "0.2.0", path = "../freebsd-libgeom" }
 humanize-rs = "0.1.5"
 nix = { version = "0.24.0", default-features = false, features = ["poll", "time"] }
 serde = "1.0"
 serde_derive = "1.0"
-structopt = { version = "0.3.22", features = ["wrap_help"] }
 termion = "1.5"
 tui = { version = "0.15.0", features = ["termion"] }
 
