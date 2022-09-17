@@ -17,8 +17,10 @@ functionality may be added on an as-needed basis.
 
 # Minimum Supported Rust Version (MSRV)
 
-freebsd-libgeom is supported on Rust 1.52.0 and higher.  It's MSRV will not be
-changed in the future without bumping the major or minor version.
+freebsd-libgeom does not guarantee any specific MSRV.  Rather, it guarantees
+compatibility with the oldest rustc shipped in the current FreeBSD ports tree.
+
+* https://www.freshports.org/lang/rust/
 
 # License
 
