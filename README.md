@@ -32,8 +32,10 @@ gstat-rs demonstrating side-by-side mode, sorting by %busy.
 
 # Minimum Supported Rust Version (MSRV)
 
-gstat-rs is supported on Rust 1.52.0 and higher.  It's MSRV will not be
-changed in the future without bumping the major or minor version.
+gstat-rs does not guarantee any specific MSRV.  Rather, it guarantees
+compatibility with the oldest rustc shipped in the current FreeBSD ports tree.
+
+* https://www.freshports.org/lang/rust/
 
 # License
 
