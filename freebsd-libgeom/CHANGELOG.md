@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [ 0.2.1 ] - 2022-10-05
+
+### Fixed
+
+- Update `bindgen` to remove build dependency on the `ansi_term` crate.
+  (#[15](https://github.com/asomers/gstat-rs/pull/15))
+
 ## [ 0.2.0 ] - 2021-07-30
 
 ### Fixed

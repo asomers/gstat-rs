@@ -16,8 +16,8 @@ targets = [
 
 # Skip tagging and pushing.  Those will be done by the gstat crate
 [package.metadata.release]
-disable-tag = true
-disable-push = true
+tag = false
+push = false
 
 [dependencies]
 
