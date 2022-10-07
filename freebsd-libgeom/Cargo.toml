@@ -1,6 +1,6 @@
 [package]
 name = "freebsd-libgeom"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2018"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
