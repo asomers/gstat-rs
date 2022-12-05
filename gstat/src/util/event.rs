@@ -50,7 +50,7 @@ impl<T: TermRead> Events<T> {
                     None
                 }
                 Some(Err(e)) => {
-                    eprintln!("Error: reading from terminal returned {}", e);
+                    eprintln!("Error: reading from terminal returned {e}");
                     None
                 }
             }

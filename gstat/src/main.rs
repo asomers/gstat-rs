@@ -883,7 +883,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
     }
     if let Err(e) = confy::store("gstat-rs", &cfg) {
-        eprintln!("Warning: failed to save config file: {}", e);
+        eprintln!("Warning: failed to save config file: {e}");
     }
     terminal.set_cursor(0, terminal.size()?.height - 1)?;
 
