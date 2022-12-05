@@ -26,9 +26,9 @@ pre-release-replacements = [
 bitfield = "0.13.2"
 clap = { version = "3.0", features = ["derive"] }
 confy = "0.4.0"
-freebsd-libgeom = { version = "0.2.0", path = "../freebsd-libgeom" }
+freebsd-libgeom = { version = "0.2.1", path = "../freebsd-libgeom" }
 humanize-rs = "0.1.5"
-nix = { version = "0.24.0", default-features = false, features = ["poll", "time"] }
+nix = { version = "0.26.1", default-features = false, features = ["poll", "time"] }
 serde = "1.0"
 serde_derive = "1.0"
 termion = "1.5"
