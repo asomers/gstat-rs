@@ -585,7 +585,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut cfg = if cli.reset_config {
         cli
     } else {
-        let mut cfg: Cli = confy::load("gstat-rs")?;
+        let mut cfg: Cli = confy::load("gstat-rs", None)?;
         cfg |= cli;
         cfg
     };
@@ -882,7 +882,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
         };
     }
-    if let Err(e) = confy::store("gstat-rs", &cfg) {
+    if let Err(e) = confy::store("gstat-rs", None, &cfg) {
         eprintln!("Warning: failed to save config file: {e}");
     }
     terminal.set_cursor(0, terminal.size()?.height - 1)?;
