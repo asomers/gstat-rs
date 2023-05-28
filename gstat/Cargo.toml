@@ -25,7 +25,7 @@ pre-release-replacements = [
 
 [dependencies]
 bitfield = "0.13.2"
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "4.0", features = ["derive"] }
 confy = "0.5.0"
 freebsd-libgeom = { version = "0.2.1", path = "../freebsd-libgeom" }
 humanize-rs = "0.1.5"

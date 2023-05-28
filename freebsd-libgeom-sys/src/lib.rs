@@ -12,10 +12,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 
-// bindgen generates UB in unit tests
-// https://github.com/rust-lang/rust-bindgen/issues/1651
-#![cfg_attr(test, allow(deref_nullptr))]
-
 #[cfg(not(crossdocs))]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

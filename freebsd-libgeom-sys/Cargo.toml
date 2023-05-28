@@ -22,4 +22,4 @@ push = false
 [dependencies]
 
 [build-dependencies]
-bindgen = { version = "0.60.0", features=[] }
+bindgen = { version = "0.64.0", features=[] }
