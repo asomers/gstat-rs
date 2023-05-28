@@ -23,7 +23,7 @@ common: &COMMON
 
 task:
   env:
-    VERSION: 1.58.0
+    VERSION: 1.64.0
   matrix:
     - name: FreeBSD 14.0-CURRENT MSRV
       freebsd_instance:
