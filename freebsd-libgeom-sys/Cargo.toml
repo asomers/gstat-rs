@@ -22,4 +22,7 @@ push = false
 [dependencies]
 
 [build-dependencies]
-bindgen = { version = "0.60.0", features=[] }
+bindgen = { version = "0.64.0", features=[] }
+# We don't use regex directly, but we must depend on 1.5.1 so that bindgen
+# builds with -Zminimal-versions.
+regex = "1.5.1"

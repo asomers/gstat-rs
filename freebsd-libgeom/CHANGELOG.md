@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [ Unreleased ] - ReleaseDate
+
+### Fixed
+
+- Update `bindgen` to remove build dependency on the `atty` crate.
+  (#[19](https://github.com/asomers/gstat-rs/pull/19))
+
 ## [ 0.2.1 ] - 2022-10-05
 
 ### Fixed

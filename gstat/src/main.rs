@@ -64,7 +64,7 @@ fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
 }
 
 /// Drop-in replacement for gstat(8)
-#[derive(Debug, Default, Deserialize, Serialize, clap::StructOpt)]
+#[derive(Debug, Default, Deserialize, Serialize, clap::Parser)]
 struct Cli {
     /// Only display providers that are at least 0.1% busy
     #[clap(short = 'a', long = "auto")]
@@ -102,7 +102,7 @@ struct Cli {
     #[clap(
         short = 'I',
         long = "interval",
-        parse(try_from_str = Cli::duration_from_str)
+        value_parser = Cli::duration_from_str
     )]
     interval: Option<Duration>,
 }
@@ -581,7 +581,7 @@ impl StatefulTable {
 // https://github.com/rust-lang/rust-clippy/issues/7483
 #[allow(clippy::or_fun_call)]
 fn main() -> Result<(), Box<dyn Error>> {
-    let cli: Cli = Cli::from_args();
+    let cli: Cli = Cli::parse();
     let mut cfg = if cli.reset_config {
         cli
     } else {
