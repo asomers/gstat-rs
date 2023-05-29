@@ -14,10 +14,8 @@ targets = [
   "x86_64-unknown-freebsd",
 ]
 
-# Skip tagging and pushing.  Those will be done by the gstat crate
 [package.metadata.release]
-tag = false
-push = false
+pre-release-replacements = []
 
 [dependencies]
 

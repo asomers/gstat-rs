@@ -15,10 +15,11 @@ targets = [
   "x86_64-unknown-freebsd",
 ]
 
-# Skip tagging and pushing.  Those will be done by the gstat crate
 [package.metadata.release]
-tag = false
-push = false
+pre-release-replacements = [
+    { file="CHANGELOG.md", search="Unreleased", replace="{{version}}" },
+    { file="CHANGELOG.md", search="ReleaseDate", replace="{{date}}" }
+]
 
 [dependencies]
 freebsd-libgeom-sys = { version = "=0.1.2", path = "../freebsd-libgeom-sys" }
