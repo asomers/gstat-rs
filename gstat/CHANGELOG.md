@@ -10,6 +10,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Update `clap` to remove build dependency on the `atty` crate.
   (#[19](https://github.com/asomers/gstat-rs/pull/19))
 
+- Fixed truncation of the rightmost columns, especially when the filter
+  specification excludes all disks.
+  (#[20](https://github.com/asomers/gstat-rs/pull/20))
+
 ## [ 0.1.2 ] - 2021-07-30
 
 ### Fixed
