@@ -215,6 +215,7 @@ name = "freebsd-libgeom-sys"
 version = "0.1.2"
 dependencies = [
  "bindgen",
+ "regex",
 ]
 
 [[package]]

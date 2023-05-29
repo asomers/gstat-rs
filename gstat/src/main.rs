@@ -575,6 +575,7 @@ impl StatefulTable {
             .block(Block::default())
             .highlight_style(selected_style)
             .widths(widths)
+            .column_spacing(0)
     }
 }
 
@@ -656,7 +657,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .filter(|col| col.enabled)
                 .map(|col| {
                     if col.name == "Name" {
-                        max_name_width
+                        max_name_width.max(col.min_width())
                     } else {
                         col.min_width()
                     }
@@ -665,6 +666,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .unwrap_or_else(|| NonZeroU16::new(1).unwrap());
             let rects = Layout::default()
                 .direction(Direction::Horizontal)
+                .margin(0)
                 .constraints(
                     (0..ntables.into())
                     .map(|_| Constraint::Percentage(100 / u16::from(ntables)))
