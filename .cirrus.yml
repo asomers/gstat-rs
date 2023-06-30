@@ -57,11 +57,8 @@ task:
     - cargo audit
   # Test our minimal version spec
   minver_test_script:
-    # We can't check minver for gstat itself, since confy fails to build with
-    # its minium specified versions.  So just check freebsd-libgeom.
     - . $HOME/.cargo/env
-    - cd freebsd-libgeom
-    - cargo update -Zminimal-versions
+    - cargo update -Zdirect-minimal-versions
     - cargo check --all-targets
   before_cache_script: rm -rf $HOME/.cargo/registry/index
 
