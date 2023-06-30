@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Fix the build with Rust 1.72.0+
+  (#[21](https://github.com/asomers/gstat-rs/pull/21))
+
 ## [ 0.2.2 ] - 2023-05-29
 
 ### Fixed
