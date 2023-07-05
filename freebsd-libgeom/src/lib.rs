@@ -5,6 +5,9 @@
 //! missing.  Open a Github issue if you have a good use for them.
 //! <https://www.freebsd.org/cgi/man.cgi?query=libgeom>
 
+// https://github.com/rust-lang/rust-clippy/issues/1553
+#![allow(clippy::redundant_closure_call)]
+
 use freebsd_libgeom_sys::*;
 use lazy_static::lazy_static;
 use std::{
