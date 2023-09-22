@@ -24,7 +24,7 @@ use termion::{
     input::MouseTerminal,
     raw::IntoRawMode,
 };
-use tui::{
+use ratatui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
@@ -688,7 +688,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             if editting_regex {
                 let area = popup_layout(40, 3, f.size());
-                let popup_box = Paragraph::new(new_regex.as_ref())
+                let popup_box = Paragraph::new(new_regex.as_str())
                     .block(
                         Block::default()
                         .borders(Borders::ALL)
