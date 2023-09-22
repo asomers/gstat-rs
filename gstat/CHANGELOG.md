@@ -7,6 +7,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Remove dependency on the unmaintained tui crate.
+  ([RUSTSEC-2023-0049](https://rustsec.org/advisories/RUSTSEC-2023-0049))
+  (#[23](https://github.com/asomers/gstat-rs/pull/23))
+
 - Fix the build with Rust 1.72.0+
   (#[21](https://github.com/asomers/gstat-rs/pull/21))
 
