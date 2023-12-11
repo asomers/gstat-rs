@@ -25,15 +25,15 @@ task:
   env:
     VERSION: 1.65.0
   matrix:
-    - name: FreeBSD 14.0-CURRENT MSRV
+    - name: FreeBSD 15.0-CURRENT MSRV
       freebsd_instance:
-        image_family: freebsd-14-0-snap
+        image_family: freebsd-15-0-snap
+    - name: FreeBSD 14.0 MSRV
+      freebsd_instance:
+        image: freebsd-14-0-release-amd64-ufs
     - name: FreeBSD 13.2 MSRV
       freebsd_instance:
         image: freebsd-13-2-release-amd64
-    - name: FreeBSD 12.4 MSRV
-      freebsd_instance:
-        image: freebsd-12-4-release-amd64
   << : *COMMON
   before_cache_script: rm -rf $HOME/.cargo/registry/index
 
