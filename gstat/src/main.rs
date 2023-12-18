@@ -1,15 +1,5 @@
 mod util;
 
-use bitfield::bitfield;
-use clap::Parser;
-use crate::util::{
-    event::{Event, Events},
-    iter::IteratorExt
-};
-use freebsd_libgeom::{Snapshot, Statistics, Tree};
-use nix::time::{ClockId, clock_gettime};
-use regex::Regex;
-use serde_derive::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     error::Error,
@@ -19,13 +9,16 @@ use std::{
     ops::BitOrAssign,
     time::Duration
 };
-use termion::{
-    event::Key,
-    input::MouseTerminal,
-    raw::IntoRawMode,
-};
+
+use bitfield::bitfield;
+use clap::Parser;
+use crossterm::event::KeyCode;
+use freebsd_libgeom::{Snapshot, Statistics, Tree};
+use nix::time::{ClockId, clock_gettime};
+use regex::Regex;
+use serde_derive::{Deserialize, Serialize};
 use ratatui::{
-    backend::TermionBackend,
+    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect,},
     style::{Color, Modifier, Style},
     text::Text,
@@ -35,6 +28,8 @@ use ratatui::{
     },
     Terminal,
 };
+
+use crate::util::{event::Event, iter::IteratorExt};
 
 /// helper function to create a one-line popup box
 fn popup_layout(x: u16, y: u16, r: Rect) -> Rect {
@@ -607,13 +602,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
     // Terminal initialization
-    let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    let stdout = io::stdout();
+    crossterm::terminal::enable_raw_mode().unwrap();
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-
-    let stdin = io::stdin();
-    let mut events = Events::new(stdin);
 
     let mut data = DataSource::new()?;
     let mut table = StatefulTable::default();
@@ -724,35 +716,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }).unwrap();
 
-        match events.poll(&tick_rate) {
+        match util::event::poll(&tick_rate) {
             Some(Event::Tick) => {
                 if !paused {
                     data.refresh()?;
                     data.sort(sort_idx, cfg.reverse);
                 }
             }
-            Some(Event::Key(key)) => {
+            Some(Event::Key(kev)) => {
                 if editting_regex {
-                    match key {
-                        Key::Char('\n') => {
+                    match kev.code {
+                        KeyCode::Enter => {
                             editting_regex = false;
                             filter = Some(Regex::new(&new_regex)?);
                             cfg.filter = Some(new_regex.split_off(0));
                         }
-                        Key::Char(c) => {
+                        KeyCode::Char(c) => {
                             new_regex.push(c);
                         }
-                        Key::Backspace => {
+                        KeyCode::Backspace => {
                             new_regex.pop();
                         }
-                        Key::Esc => {
+                        KeyCode::Esc => {
                             editting_regex = false;
                         }
                         _ => {}
                     }
                 } else if selecting_columns {
-                    match key {
-                        Key::Char(' ') => {
+                    match kev.code {
+                        KeyCode::Char(' ') => {
                             if let Some(i) = columns.state.selected() {
                                 // unwrapping is safe; the default value should
                                 // always be set by this point.
@@ -760,23 +752,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 columns.cols[i].enabled ^= true;
                             }
                         }
-                        Key::Char('q') => {
+                        KeyCode::Char('q') => {
                             break;
                         }
-                        Key::Down => {
+                        KeyCode::Down => {
                             columns.next();
                         }
-                        Key::Up => {
+                        KeyCode::Up => {
                             columns.previous();
                         }
-                        Key::Esc => {
+                        KeyCode::Esc => {
                             selecting_columns = false;
                         }
                         _ => {}
                     }
                 } else {
-                    match key {
-                        Key::Char(' ') => {
+                    match kev.code {
+                        KeyCode::Char(' ') => {
                             paused ^= true;
                             if !paused {
                                 // Refresh immediately after unpause.
@@ -784,7 +776,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 data.sort(sort_idx, cfg.reverse);
                             }
                         }
-                        Key::Char('+') => {
+                        KeyCode::Char('+') => {
                             loop {
                                 match sort_idx {
                                     Some(idx) => {sort_idx = Some(idx + 1);}
@@ -805,7 +797,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                             cfg.sort = sort_key.map(str::to_owned);
                             data.sort(sort_idx, cfg.reverse);
                         }
-                        Key::Char('-') => {
+                        KeyCode::Char('-') => {
                             loop {
                                 match sort_idx {
                                     Some(idx) => {
@@ -827,48 +819,48 @@ fn main() -> Result<(), Box<dyn Error>> {
                             cfg.sort = sort_key.map(str::to_owned);
                             data.sort(sort_idx, cfg.reverse);
                         }
-                        Key::Char('<') => {
+                        KeyCode::Char('<') => {
                             tick_rate /= 2;
                             cfg.interval = Some(tick_rate);
                         }
-                        Key::Char('>') => {
+                        KeyCode::Char('>') => {
                             tick_rate *= 2;
                             cfg.interval = Some(tick_rate);
                         }
-                        Key::Char('F') => {
+                        KeyCode::Char('F') => {
                             cfg.filter = None;
                             filter = None;
                         }
-                        Key::Char('a') => {
+                        KeyCode::Char('a') => {
                             cfg.auto ^= true;
                         }
-                        Key::Char('f') => {
+                        KeyCode::Char('f') => {
                             editting_regex = true;
                             new_regex = String::new();
                         }
-                        Key::Char('p') => {
+                        KeyCode::Char('p') => {
                             cfg.physical ^= true;
                         }
-                        Key::Char('q') => {
+                        KeyCode::Char('q') => {
                             break;
                         }
-                        Key::Char('r') => {
+                        KeyCode::Char('r') => {
                             cfg.reverse ^= true;
                             data.sort(sort_idx, cfg.reverse);
                         }
-                        Key::Down => {
+                        KeyCode::Down => {
                             table.next();
                         }
-                        Key::Up => {
+                        KeyCode::Up => {
                             table.previous();
                         }
-                        Key::Delete => {
+                        KeyCode::Delete => {
                             if let Some(i) = sort_idx {
                                 cfg.columns.as_mut().unwrap().0 ^= 1 << i;
                                 columns.cols[i].enabled ^= true;
                             }
                         }
-                        Key::Insert => {
+                        KeyCode::Insert => {
                             selecting_columns = true;
                         }
                         _ => {}
@@ -882,6 +874,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // stdin closed for some reason
                 break;
             },
+            _ => {
+                // Ignore unknown events
+            }
         };
     }
     if let Err(e) = confy::store("gstat-rs", None, &cfg) {
