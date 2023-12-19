@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Fixed the display of provider names longer than 10 characters, a regression
+  since 0.1.3.
+  (#[25](https://github.com/asomers/gstat-rs/pull/25))
+
 ## [0.1.4] - 2023-09-22
 
 ### Fixed
