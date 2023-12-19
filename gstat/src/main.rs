@@ -19,7 +19,7 @@ use regex::Regex;
 use serde_derive::{Deserialize, Serialize};
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect,},
+    layout::{Constraint, Direction, Layout, Rect, SegmentSize},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{
@@ -565,11 +565,11 @@ impl StatefulTable {
     {
         let selected_style = Style::default().add_modifier(Modifier::REVERSED);
         self.len = rows.len();
-        Table::new(rows)
+        Table::new(rows, widths)
             .header(header)
             .block(Block::default())
             .highlight_style(selected_style)
-            .widths(widths)
+            .segment_size(SegmentSize::LastTakesRemainder)
             .column_spacing(0)
     }
 }
