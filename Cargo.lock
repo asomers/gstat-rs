@@ -291,7 +291,7 @@ dependencies = [
  "approx",
  "freebsd-libgeom-sys",
  "lazy_static",
- "nix 0.26.4",
+ "nix",
 ]
 
 [[package]]
@@ -328,7 +328,7 @@ dependencies = [
  "crossterm",
  "freebsd-libgeom",
  "humanize-rs",
- "nix 0.27.1",
+ "nix",
  "nonzero_ext",
  "ratatui",
  "regex",
@@ -474,17 +474,6 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "nix"
-version = "0.26.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
-dependencies = [
- "bitflags 1.3.2",
- "cfg-if",
- "libc",
 ]
 
 [[package]]
