@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Correctly reset terminal settings when quitting the application.
+  (#[30](https://github.com/asomers/gstat-rs/pull/30))
+
 ## [0.1.5] - 2023-12-19
 
 ### Fixed

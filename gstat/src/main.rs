@@ -883,6 +883,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         eprintln!("Warning: failed to save config file: {e}");
     }
     terminal.set_cursor(0, terminal.size()?.height - 1)?;
+    crossterm::terminal::disable_raw_mode().unwrap();
 
     Ok(())
 }
