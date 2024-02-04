@@ -24,7 +24,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd July 15, 2021
+.Dd February 4, 2024
 .Dt GSTAT 8
 .Os
 .Sh NAME
@@ -164,6 +164,13 @@ Toggle reverse sort.
 This has the same effect as the
 .Fl Fl reverse
 command line option.
+.El
+.Sh ENVIRONMENT
+The following environment variable affects the execution of
+.Nm :
+.Bl -tag -width NO_COLOR
+.It Ev NO_COLOR
+Output will be rendered in black-and-white only, without color.
 .El
 .Sh EXIT STATUS
 .Ex -std
