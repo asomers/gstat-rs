@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Better color contrast, especially on OSX Terminal
+  (#[32](https://github.com/asomers/gstat-rs/pull/32))
+
 - Correctly reset terminal settings when quitting the application.
   (#[30](https://github.com/asomers/gstat-rs/pull/30))
 

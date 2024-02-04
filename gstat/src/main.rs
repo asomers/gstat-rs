@@ -611,7 +611,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut table = StatefulTable::default();
     data.sort(sort_idx, cfg.reverse);
 
-    let normal_style = Style::default().bg(Color::Blue);
+    let normal_style = Style::default().bg(Color::LightBlue);
 
     terminal.clear()?;
     loop {
