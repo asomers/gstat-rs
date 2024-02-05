@@ -620,7 +620,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .enumerate()
                 .filter(|(_i, col)| col.enabled)
                 .map(|(i, col)| {
-                    let style = Style::default().fg(Color::Red);
+                    let style = Style::default()
+                        .fg(Color::LightYellow)
+                        .add_modifier(Modifier::BOLD);
                     let style = if sort_idx == Some(i) {
                         style.add_modifier(Modifier::REVERSED)
                     } else {
