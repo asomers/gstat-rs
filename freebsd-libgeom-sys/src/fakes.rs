@@ -6,4 +6,6 @@
 pub struct devstat();
 pub struct gident();
 pub struct gmesh();
+#[allow(dead_code)]
+#[derive(Copy, Clone)]
 pub struct timespec(i32);
