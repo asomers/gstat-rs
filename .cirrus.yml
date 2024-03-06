@@ -33,7 +33,7 @@ task:
         image: freebsd-14-0-release-amd64-ufs
     - name: FreeBSD 13.2 MSRV
       freebsd_instance:
-        image: freebsd-13-2-release-amd64
+        image: freebsd-13-3-release-amd64
   << : *COMMON
   before_cache_script: rm -rf $HOME/.cargo/registry/index
 
