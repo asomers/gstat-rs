@@ -1,7 +1,7 @@
 [package]
 name = "gstat"
 version = "0.1.6"
-edition = "2018"
+edition = "2021"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
 repository = "https://github.com/asomers/gstat-rs"
@@ -9,7 +9,7 @@ description = "Enhanced replacement for FreeBSD's gstat utility"
 categories = ["command-line-utilities"]
 keywords = ["freebsd"]
 include = ["src/**/*", "LICENSE", "README.md"]
-rust-version = "1.64"
+rust-version = "1.70"
 
 [package.metadata.docs.rs]
 targets = [
