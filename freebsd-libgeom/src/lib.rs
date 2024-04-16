@@ -22,6 +22,9 @@ use std::{
     ptr::NonNull
 };
 
+// BINTIME_SCALE is 1 / 2**64
+const BINTIME_SCALE: f64 = 5.421010862427522e-20;
+
 /// Used by [`Statistics::compute`]
 macro_rules! delta {
     ($current: ident, $previous: ident, $field:ident, $index:expr) => {
@@ -41,8 +44,6 @@ macro_rules! delta {
 macro_rules! delta_t {
     ($cur: expr, $prev: expr, $bintime:expr) => {
         {
-            // BINTIME_SCALE is 1 / 2**64
-            const BINTIME_SCALE: f64 = 5.421010862427522e-20;
             let old: bintime = if let Some(prev) = $prev {
                 $bintime(unsafe {prev.devstat.as_ref() })
             } else {
@@ -105,6 +106,9 @@ macro_rules! mb_per_sec {
 
 macro_rules! ms_per_xfer {
     ($self: ident, $meth: ident, $xfers: ident, $duration: ident) => {
+        pub fn $duration(&$self) -> f64 {
+            $self.$duration
+        }
         pub fn $meth(&$self) -> f64 {
             if $self.$xfers > 0 {
                 $self.$duration * 1000.0 / $self.$xfers as f64
@@ -444,6 +448,11 @@ impl<'a> Statistics<'a> {
             total_transfers_read,
             total_transfers_write,
         }
+    }
+
+    pub fn busy_time(&self) -> f64 {
+        let bt = unsafe{ self.current.devstat.as_ref() };
+        bt.busy_time.sec as f64 + bt.busy_time.frac as f64 * BINTIME_SCALE
     }
 
     /// The percentage of time the device had one or more transactions
