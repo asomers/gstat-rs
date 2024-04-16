@@ -4,4 +4,5 @@ members = [
 	"gstat",
 	"freebsd-libgeom",
 	"freebsd-libgeom-sys",
+	"freebsd-geom-exporter"
 ]
