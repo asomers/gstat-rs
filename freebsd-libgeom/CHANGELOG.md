@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Added
+
+- Added a `busy_time` method to each `Statistics` object.  Added
+  `total_duration` and `total_duration_{read,write,free,other}` methods too.
+  (#[38](https://github.com/asomers/gstat-rs/pull/38))
+
 ## [0.2.4] - 2024-02-05
 
 ### Changed
