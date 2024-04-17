@@ -21,7 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
-freebsd-libgeom = { version = "0.2.4", path = "../freebsd-libgeom" }
+freebsd-libgeom = { version = "0.3.0", path = "../freebsd-libgeom" }
 prometheus_exporter = "0.8.4"
 
 [dependencies.regex]
