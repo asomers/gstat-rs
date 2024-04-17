@@ -15,6 +15,10 @@ pre-release-replacements = [
     { file="CHANGELOG.md", search="ReleaseDate", replace="{{date}}" }
 ]
 
+[[bin]]
+name = "geom-exporter"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 freebsd-libgeom = { version = "0.2.4", path = "../freebsd-libgeom" }
