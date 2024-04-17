@@ -22,7 +22,7 @@ pre-release-replacements = [
 ]
 
 [dependencies]
-freebsd-libgeom-sys = { version = "=0.1.5", path = "../freebsd-libgeom-sys" }
+freebsd-libgeom-sys = { version = "=0.1.6", path = "../freebsd-libgeom-sys" }
 lazy_static = "1.4"
 
 [dev-dependencies]
