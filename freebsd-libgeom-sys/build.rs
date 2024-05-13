@@ -5,6 +5,7 @@ fn main() {
     use std::env;
     use std::path::PathBuf;
 
+    println!("cargo::rustc-check-cfg=cfg(crossdocs)");
     println!("cargo:rerun-if-env-changed=LLVM_CONFIG_PATH");
     println!("cargo:rustc-link-lib=geom");
     let bindings = bindgen::Builder::default()
@@ -25,6 +26,7 @@ fn main() {
 
 #[cfg(not(target_os = "freebsd"))]
 fn main() {
+    println!("cargo::rustc-check-cfg=cfg(crossdocs)");
     // If we're building not on FreeBSD, there's no way the build can succeed.
     // This probably means we're building docs on docs.rs, so set this config
     // variable.  We'll use it to stub out the crate well enough that
