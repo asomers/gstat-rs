@@ -2,7 +2,6 @@ mod util;
 
 use std::{
     cmp::Ordering,
-    error::Error,
     io,
     mem,
     num::NonZeroU16,
@@ -10,6 +9,7 @@ use std::{
     time::Duration
 };
 
+use anyhow::{Context, Result};
 use bitfield::bitfield;
 use clap::Parser;
 use crossterm::event::KeyCode;
@@ -103,7 +103,7 @@ struct Cli {
 }
 
 impl Cli {
-    fn duration_from_str(s: &str) -> Result<Duration, humanize_rs::ParseError> {
+    fn duration_from_str(s: &str) -> std::result::Result<Duration, humanize_rs::ParseError> {
         if let Ok(us) = s.parse::<u64>() {
             // With no units, default to microseconds
             Ok(Duration::from_micros(us))
@@ -461,12 +461,12 @@ struct DataSource {
 }
 
 impl DataSource {
-    fn new() -> io::Result<DataSource> {
-        let tree = Tree::new()?;
+    fn new() -> Result<DataSource> {
+        let tree = Tree::new().context("Error opening GEOM tree")?;
         let prev = None;
         // XXX difference from gstat: the first display will show stats since
         // boot, like iostat.
-        let cur = Snapshot::new()?;
+        let cur = Snapshot::new().context("obtaining initial GEOM snapshot")?;
         let items = Default::default();
         let mut ds = DataSource {
             prev,
@@ -478,20 +478,22 @@ impl DataSource {
         Ok(ds)
     }
 
-    pub fn refresh(&mut self) -> io::Result<()>
+    pub fn refresh(&mut self) -> Result<()>
     {
-        self.prev = Some(mem::replace(&mut self.cur, Snapshot::new()?));
+        let ss = Snapshot::new().context("obtaining GEOM snapshot")?;
+        self.prev = Some(mem::replace(&mut self.cur, ss));
         self.regen()?;
         Ok(())
     }
 
     /// Regenerate the data from geom
-    fn regen(&mut self) -> io::Result<()>
+    fn regen(&mut self) -> Result<()>
     {
         let etime = if let Some(prev) = self.prev.as_mut() {
             f64::from(self.cur.timestamp() - prev.timestamp())
         } else {
-            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)?;
+            let boottime = clock_gettime(ClockId::CLOCK_UPTIME)
+                .context("clock_gettime")?;
             boottime.tv_sec() as f64 + boottime.tv_nsec() as f64 * 1e-9
         };
         self.items.clear();
@@ -574,14 +576,23 @@ impl StatefulTable {
     }
 }
 
+fn cleanup_terminal<B>(terminal: &mut Terminal<B>) -> Result<()>
+    where B: ratatui::prelude::Backend
+{
+    let tsize = terminal.size().context("querying terminal size")?;
+    terminal.set_cursor(0, tsize.height - 1).context("setting cursor")?;
+    crossterm::terminal::disable_raw_mode().context("Disabling raw mode")?;
+    Ok(())
+}
+
 // https://github.com/rust-lang/rust-clippy/issues/7483
 #[allow(clippy::or_fun_call)]
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let cli: Cli = Cli::parse();
     let mut cfg = if cli.reset_config {
         cli
     } else {
-        let mut cfg: Cli = confy::load("gstat-rs", None)?;
+        let mut cfg: Cli = confy::load("gstat-rs", None).context("opening config file")?;
         cfg |= cli;
         cfg
     };
@@ -605,7 +616,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let stdout = io::stdout();
     crossterm::terminal::enable_raw_mode().unwrap();
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = Terminal::new(backend).context("Error opening terminal")?;
 
     let mut data = DataSource::new()?;
     let mut table = StatefulTable::default();
@@ -613,7 +624,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let normal_style = Style::default().bg(Color::Blue);
 
-    terminal.clear()?;
+    terminal.clear().context("clearing terminal")?;
     loop {
         terminal.draw(|f| {
             let header_cells = columns.cols.iter()
@@ -718,7 +729,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }).unwrap();
 
-        match util::event::poll(&tick_rate) {
+        match util::event::poll(&tick_rate)? {
             Some(Event::Tick) => {
                 if !paused {
                     data.refresh()?;
@@ -729,9 +740,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                 if editting_regex {
                     match kev.code {
                         KeyCode::Enter => {
-                            editting_regex = false;
-                            filter = Some(Regex::new(&new_regex)?);
-                            cfg.filter = Some(new_regex.split_off(0));
+                            match Regex::new(&new_regex) {
+                                Ok(regex) => {
+                                    editting_regex = false;
+                                    filter = Some(regex);
+                                    cfg.filter = Some(new_regex.split_off(0));
+                                }
+                                Err(e) => {
+                                    cleanup_terminal(&mut terminal)?;
+                                    Err(e).context("compiling regex")?;
+                                }
+                            }
                         }
                         KeyCode::Char(c) => {
                             new_regex.push(c);
@@ -884,8 +903,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Err(e) = confy::store("gstat-rs", None, &cfg) {
         eprintln!("Warning: failed to save config file: {e}");
     }
-    terminal.set_cursor(0, terminal.size()?.height - 1)?;
-    crossterm::terminal::disable_raw_mode().unwrap();
+    cleanup_terminal(&mut terminal)?;
 
     Ok(())
 }
