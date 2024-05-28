@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Better error messages
+  (#[41](https://github.com/asomers/gstat-rs/pull/41))
+
 ## [0.1.6] - 2024-02-05
 
 ### Fixed
