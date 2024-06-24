@@ -8,11 +8,10 @@ pub enum Event {
     Key(event::KeyEvent),
     Mouse(event::MouseEvent),
     Tick,
-    Other
+    Other,
 }
 
-pub fn poll(tick_rate: &Duration) -> Result<Option<Event>>
-{
+pub fn poll(tick_rate: &Duration) -> Result<Option<Event>> {
     if !event::poll(*tick_rate).context("polling terminal")? {
         Ok(Some(Event::Tick))
     } else {

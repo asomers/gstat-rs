@@ -61,6 +61,10 @@ task:
     - . $HOME/.cargo/env
     - cargo update -Zdirect-minimal-versions
     - cargo check --all-targets
+  fmt_script:
+    - . $HOME/.cargo/env
+    - rustup component add rustfmt
+    - cargo fmt -- --check --color=never
   before_cache_script: rm -rf $HOME/.cargo/registry/index
 
 # Ensure that the docs can be cross-compiled, as Cirrus does.
