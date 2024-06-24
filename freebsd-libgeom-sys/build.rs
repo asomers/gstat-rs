@@ -2,8 +2,7 @@
 
 #[cfg(target_os = "freebsd")]
 fn main() {
-    use std::env;
-    use std::path::PathBuf;
+    use std::{env, path::PathBuf};
 
     println!("cargo::rustc-check-cfg=cfg(crossdocs)");
     println!("cargo:rerun-if-env-changed=LLVM_CONFIG_PATH");
