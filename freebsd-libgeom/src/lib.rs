@@ -255,7 +255,7 @@ impl<'a> Iterator for SnapshotPairIter<'a> {
     }
 }
 
-impl<'a> Drop for SnapshotPairIter<'a> {
+impl Drop for SnapshotPairIter<'_> {
     fn drop(&mut self) {
         self.cur.reset();
         if let Some(prev) = self.prev.as_mut() {
@@ -335,7 +335,7 @@ impl<'a> Iterator for SnapshotIter<'a> {
     }
 }
 
-impl<'a> Drop for SnapshotIter<'a> {
+impl Drop for SnapshotIter<'_> {
     fn drop(&mut self) {
         self.0.reset();
     }
