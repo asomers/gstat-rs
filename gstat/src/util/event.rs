@@ -19,7 +19,7 @@ pub fn poll(tick_rate: &Duration) -> Result<Option<Event>> {
             Ok(event::Event::Key(key)) => Ok(Some(Event::Key(key))),
             Ok(event::Event::Mouse(mev)) => Ok(Some(Event::Mouse(mev))),
             Ok(_) => Ok(Some(Event::Other)),
-            e => panic!("Unhandled error {:?}", e),
+            e => panic!("Unhandled error {e:?}"),
         }
     }
 }
