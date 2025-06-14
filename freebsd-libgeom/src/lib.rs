@@ -267,7 +267,7 @@ pub struct Snapshot(NonNull<c_void>);
 
 impl Snapshot {
     /// Iterate through all devices described by the snapshot
-    pub fn iter(&mut self) -> SnapshotIter {
+    pub fn iter(&mut self) -> SnapshotIter<'_> {
         SnapshotIter(self)
     }
 

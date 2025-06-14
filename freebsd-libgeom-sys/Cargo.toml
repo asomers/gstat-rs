@@ -20,4 +20,4 @@ pre-release-replacements = []
 [dependencies]
 
 [build-dependencies]
-bindgen = { version = "0.66", features=[] }
+bindgen = { version = "0.72", features=[] }

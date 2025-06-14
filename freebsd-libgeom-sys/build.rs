@@ -14,7 +14,7 @@ fn main() {
         .allowlist_function("gctl_.*")
         .allowlist_function("g_.*")
         .allowlist_type("devstat_trans_flags")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
