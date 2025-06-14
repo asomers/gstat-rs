@@ -31,8 +31,8 @@ crossterm = { version = "0.29.0", default-features = false, features = ["events"
 freebsd-libgeom = { version = "0.3.0", path = "../freebsd-libgeom" }
 humanize-rs = "0.1.5"
 nix = { version = "0.27.0", default-features = false, features = ["time"] }
-serde = "1.0.97"
-serde_derive = "1.0.97"
+serde = "1.0.145"
+serde_derive = "1.0.145"
 ratatui = { version = "0.30.0-alpha.4", default-features = false, features = ["crossterm"] }
 
 [dependencies.regex]
