@@ -436,7 +436,7 @@ impl Element {
         }
     }
 
-    fn row(&self, columns: &Columns) -> Row {
+    fn row(&self, columns: &Columns) -> Row<'_> {
         let mut cells = Vec::with_capacity(Columns::LEN);
         if columns.cols[Columns::QD].enabled {
             cells.push(Cell::from(format!("{:>4}", self.qd)));
