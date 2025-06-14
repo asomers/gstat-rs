@@ -2,6 +2,7 @@ mod util;
 
 use std::{
     cmp::Ordering,
+    error,
     io,
     mem,
     num::NonZeroU16,
@@ -17,7 +18,7 @@ use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use nix::time::{clock_gettime, ClockId};
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect, SegmentSize},
+    layout::{Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{
@@ -630,8 +631,8 @@ impl StatefulTable {
         Table::new(rows, widths)
             .header(header)
             .block(Block::default())
-            .highlight_style(selected_style)
-            .segment_size(SegmentSize::LastTakesRemainder)
+            .row_highlight_style(selected_style)
+            .flex(Flex::Legacy)
             .column_spacing(0)
     }
 }
@@ -639,10 +640,11 @@ impl StatefulTable {
 fn cleanup_terminal<B>(terminal: &mut Terminal<B>) -> Result<()>
 where
     B: ratatui::prelude::Backend,
+    B::Error: error::Error + Send + Sync + 'static,
 {
     let tsize = terminal.size().context("querying terminal size")?;
     terminal
-        .set_cursor(0, tsize.height - 1)
+        .set_cursor_position((0, tsize.height - 1))
         .context("setting cursor")?;
     crossterm::terminal::disable_raw_mode().context("Disabling raw mode")?;
     Ok(())
@@ -742,7 +744,7 @@ fn main() -> Result<()> {
                         }
                     })
                     .sum();
-                let ntables = NonZeroU16::new(f.size().width / twidth)
+                let ntables = NonZeroU16::new(f.area().width / twidth)
                     .unwrap_or_else(|| NonZeroU16::new(1).unwrap());
                 let rects = Layout::default()
                     .direction(Direction::Horizontal)
@@ -754,7 +756,7 @@ fn main() -> Result<()> {
                             })
                             .collect::<Vec<_>>(),
                     )
-                    .split(f.size());
+                    .split(f.area());
                 let multirows = data
                     .items
                     .iter()
@@ -774,7 +776,7 @@ fn main() -> Result<()> {
                 }
 
                 if editting_regex {
-                    let area = popup_layout(40, 3, f.size());
+                    let area = popup_layout(40, 3, f.area());
                     let popup_box = Paragraph::new(new_regex.as_str()).block(
                         Block::default()
                             .borders(Borders::ALL)
@@ -784,7 +786,7 @@ fn main() -> Result<()> {
                     f.render_widget(popup_box, area);
                 } else if selecting_columns {
                     let boxwidth = columns.max_name_width() + 6;
-                    let area = popup_layout(boxwidth, 20, f.size());
+                    let area = popup_layout(boxwidth, 20, f.area());
                     f.render_widget(Clear, area);
                     let items = columns
                         .cols
