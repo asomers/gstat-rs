@@ -5,6 +5,7 @@ use std::{
 };
 
 use clap::Parser;
+use env_logger::{Builder, Env};
 use freebsd_libgeom::{Snapshot, Statistics, Tree};
 use prometheus_exporter::prometheus::register_gauge_vec;
 use regex::Regex;
@@ -31,6 +32,10 @@ struct Cli {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let cli: Cli = Cli::parse();
+
+    // Setup logger with default level info so we can see the messages from
+    // prometheus_exporter.
+    Builder::from_env(Env::default().default_filter_or("info")).init();
 
     // Parse address used to bind exporter to.
     let ia: IpAddr = cli.addr.parse().unwrap();
