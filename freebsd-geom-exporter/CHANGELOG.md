@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Added
+
+- Added `RUST_LOG` support.
+  (#[51](https://github.com/asomers/gstat-rs/pull/51))
+
 ## [0.1.1] - 2024-04-18
 
 ### Fixed
