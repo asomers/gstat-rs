@@ -10,6 +10,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 - Added `RUST_LOG` support.
   (#[51](https://github.com/asomers/gstat-rs/pull/51))
 
+### Fixed
+
+- Better error handling for invalid command line options.
+  (#[52](https://github.com/asomers/gstat-rs/pull/52))
+
 ## [0.1.1] - 2024-04-18
 
 ### Fixed
