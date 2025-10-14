@@ -2,6 +2,7 @@
 use std::{
     error::Error,
     net::{IpAddr, SocketAddr},
+    process::exit,
 };
 
 use clap::Parser;
@@ -38,13 +39,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     Builder::from_env(Env::default().default_filter_or("info")).init();
 
     // Parse address used to bind exporter to.
-    let ia: IpAddr = cli.addr.parse().unwrap();
+    let ia: IpAddr = cli.addr.parse().unwrap_or_else(|e| {
+        eprintln!("Cannot parse address: {e}");
+        exit(2);
+    });
     let sa = SocketAddr::new(ia, cli.port);
 
-    let include = cli.include.as_ref().map(|s| Regex::new(s).unwrap());
-    let exclude = cli.exclude.as_ref().map(|s| Regex::new(s).unwrap());
+    let include = cli.include.as_ref().map(|s| {
+        Regex::new(s).unwrap_or_else(|e| {
+            eprintln!("Cannot parse include regex: {e}");
+            exit(2);
+        })
+    });
+    let exclude = cli.exclude.as_ref().map(|s| {
+        Regex::new(s).unwrap_or_else(|e| {
+            eprintln!("Cannot parse exclude regex: {e}");
+            exit(2);
+        })
+    });
 
-    let exporter = prometheus_exporter::start(sa).unwrap();
+    let exporter = prometheus_exporter::start(sa).unwrap_or_else(|e| {
+        eprintln!("Error starting exporter: {e}");
+        exit(1);
+    });
 
     let duration = register_gauge_vec!(
         "geom_duration",
