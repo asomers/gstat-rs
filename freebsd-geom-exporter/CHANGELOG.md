@@ -12,6 +12,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Handle `ECONNABORTED` errors without exiting.  This completely removes
+  dependencies on the unmaintained `prometheus-exporter` and `tiny-http`
+  crates.
+  (#[55](https://github.com/asomers/gstat-rs/pull/55))
+
 - Better error handling for invalid command line options.
   (#[52](https://github.com/asomers/gstat-rs/pull/52))
 
