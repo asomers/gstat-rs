@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
 repository = "https://github.com/asomers/gstat-rs"
-description = "Proemtheus exporter for FreeBSD's GEOM device statistics"
+description = "Prometheus exporter for FreeBSD's GEOM device statistics"
 keywords = ["freebsd", "geom", "monitoring", "prometheus"]
 rust-version = "1.80"
 
