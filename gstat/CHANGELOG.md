@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Fix running on stock FreeBSD/riscv.
+  (#[57](https://github.com/asomers/gstat-rs/pull/57))
+
 - Better error messages
   (#[41](https://github.com/asomers/gstat-rs/pull/41))
 

@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Fix running on stock FreeBSD/riscv.
+  (#[57](https://github.com/asomers/gstat-rs/pull/57))
+
 - Handle `ECONNABORTED` errors without exiting.  This completely removes
   dependencies on the unmaintained `prometheus-exporter` and `tiny-http`
   crates.
