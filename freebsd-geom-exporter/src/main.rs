@@ -6,7 +6,7 @@ use std::{
 };
 
 use axum::{
-    extract::State,
+    extract::{ConnectInfo, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -102,7 +102,12 @@ impl IntoResponse for AppError {
     }
 }
 
-async fn metrics(cli: State<Arc<Cli>>) -> Result<String, AppError> {
+async fn metrics(
+    addr: ConnectInfo<SocketAddr>,
+    cli: State<Arc<Cli>>,
+) -> Result<String, AppError> {
+    let ip = addr.ip();
+    log::debug!("Servicing request from {ip}");
     // inner relies on an implicit Into conversion to return anyhow::Error
     let inner = || -> Result<String, anyhow::Error> {
         // Note: it might be more efficient to only call Tree:new if we detect
@@ -204,7 +209,8 @@ async fn main() {
         // Annoyingly, with_state requires its argument to be `Send` even if
         // we're using a single-threaded runtime.  So we must use Arc instead of
         // Rc.
-        .with_state(Arc::new(cli));
+        .with_state(Arc::new(cli))
+        .into_make_service_with_connect_info::<SocketAddr>();
 
     let listener = TcpListener::bind(sa).await.unwrap();
     axum::serve(listener, app).await.unwrap()
