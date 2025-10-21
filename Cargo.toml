@@ -8,4 +8,3 @@ members = [
 ]
 
 [patch.crates-io]
-prometheus_exporter = { git = "https://github.com/AlexanderThaller/prometheus_exporter", rev = "c49efe6" }
