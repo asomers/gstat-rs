@@ -482,6 +482,7 @@ dependencies = [
  "clap",
  "env_logger",
  "freebsd-libgeom",
+ "log",
  "prometheus",
  "regex",
  "tokio",
