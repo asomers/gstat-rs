@@ -25,12 +25,12 @@ task:
   env:
     VERSION: 1.85.0
   matrix:
-    - name: FreeBSD 15.0-ALPHA4 MSRV
+    - name: FreeBSD 15 MSRV
       freebsd_instance:
-        image: freebsd-15-0-alpha4-amd64-ufs
+        image_family: freebsd-15-0
     - name: FreeBSD 14.3 MSRV
       freebsd_instance:
-        image: freebsd-14-3-release-amd64-ufs
+        image_family: freebsd-14-3
     - name: FreeBSD 13.5 MSRV
       freebsd_instance:
         image: freebsd-13-5-release-amd64
@@ -42,7 +42,7 @@ task:
   env:
     VERSION: nightly
   freebsd_instance:
-    image: freebsd-14-3-release-amd64-ufs
+    image_family: freebsd-14-3
   << : *COMMON
   doc_script:
     - . $HOME/.cargo/env
