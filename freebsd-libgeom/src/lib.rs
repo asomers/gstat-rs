@@ -407,10 +407,10 @@ impl<'a> Statistics<'a> {
 
     kb_per_xfer! {self, kb_per_transfer_free, total_transfers_free, total_bytes}
 
-    kb_per_xfer! {self, kb_per_transfer_read, total_transfers_read, total_bytes}
+    kb_per_xfer! {self, kb_per_transfer_read, total_transfers_read, total_bytes_read}
 
     kb_per_xfer! {self, kb_per_transfer_write, total_transfers_write,
-    total_bytes}
+    total_bytes_write}
 
     ms_per_xfer! {self, ms_per_transaction, total_transfers, total_duration}
 
