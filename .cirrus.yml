@@ -40,7 +40,9 @@ task:
 task:
   name: FreeBSD 14.3 nightly
   env:
-    VERSION: nightly
+    # Pin Rust version due to Cargo bug #16357
+    # https://github.com/rust-lang/cargo/issues/16357
+    VERSION: nightly-2025-11-30
   freebsd_instance:
     image_family: freebsd-14-3
   << : *COMMON

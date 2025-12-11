@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+- Fixed the calculation of the `kB/r`, `kB/w`, and `kB/d` columns
+  (#[60](https://github.com/asomers/gstat-rs/pull/60))
+
 - Fix running on stock FreeBSD/riscv.
   (#[57](https://github.com/asomers/gstat-rs/pull/57))
 

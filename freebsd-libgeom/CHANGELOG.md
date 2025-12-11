@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+## Fixed
+
+- Fix the calculation of the `kb_per_transfer_*` fields.
+  (#[60](https://github.com/asomers/gstat-rs/pull/60))
+
 ## [0.3.0] - 2024-04-17
 
 ### Added
