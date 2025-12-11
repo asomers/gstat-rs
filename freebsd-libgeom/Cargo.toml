@@ -1,6 +1,6 @@
 [package]
 name = "freebsd-libgeom"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
@@ -22,7 +22,7 @@ pre-release-replacements = [
 ]
 
 [dependencies]
-freebsd-libgeom-sys = { version = "=0.1.6", path = "../freebsd-libgeom-sys" }
+freebsd-libgeom-sys = { version = "=0.1.7", path = "../freebsd-libgeom-sys" }
 
 [dev-dependencies]
 approx = "0.5.0"

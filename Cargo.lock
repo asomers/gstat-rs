@@ -490,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "freebsd-libgeom"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "approx",
  "freebsd-libgeom-sys",
@@ -499,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "freebsd-libgeom-sys"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "bindgen",
 ]
@@ -556,7 +556,7 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 
 [[package]]
 name = "gstat"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "bitfield",
