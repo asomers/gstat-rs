@@ -1,6 +1,6 @@
 [package]
 name = "gstat"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 authors = ["Alan Somers <asomers@gmail.com>"]
 license = "BSD-2-Clause"
