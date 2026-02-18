@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Updated the `bytes` dependency to resolve security advisories in
+  that crate.
+  (#[66](https://github.com/asomers/gstat-rs/pull/66))
+
 ## [0.1.2] - 2025-10-27
 
 ### Added
