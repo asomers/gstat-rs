@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Fixed
+
+- Updated the `time` and `lru` dependencies to resolve security advisories in
+  those crates.
+  (#[66](https://github.com/asomers/gstat-rs/pull/66))
+
 ## [0.1.7] - 2025-12-11
 
 ### Fixed

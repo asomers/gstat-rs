@@ -600,7 +600,10 @@ impl Sub for Timespec {
 pub struct Tree(Pin<Box<gmesh>>);
 
 impl Tree {
-    // FreeBSD BUG: geom_lookupid takes a mutable pointer when it could be const
+    // FreeBSD BUG: prior to 14.4, 15.1, and 16.0, geom_lookupid took a mutable
+    // pointer when it could've been const.
+    // https://github.com/freebsd/freebsd-src/commit/cff33cd16d6751ab0693a00473ccfe7c8132cfdf
+    #[allow(clippy::unnecessary_mut_passed)]
     pub fn lookup<'a>(&'a mut self, id: Id) -> Option<Gident<'a>> {
         let raw = unsafe { geom_lookupid(&mut *self.0, id.id) };
         NonNull::new(raw).map(|ident| Gident {
