@@ -816,11 +816,9 @@ fn main() -> Result<()> {
             .unwrap();
 
         match util::event::poll(&tick_rate)? {
-            Some(Event::Tick) => {
-                if !paused {
-                    data.refresh()?;
-                    data.sort(sort_idx, cfg.reverse);
-                }
+            Some(Event::Tick) if !paused => {
+                data.refresh()?;
+                data.sort(sort_idx, cfg.reverse);
             }
             Some(Event::Key(kev)) => {
                 if editting_regex {
