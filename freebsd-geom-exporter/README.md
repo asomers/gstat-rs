@@ -1,6 +1,6 @@
 # FreeBSD GEOM statistics exporter for Prometheus
 
-[![Build Status](https://api.cirrus-ci.com/github/asomers/gstat-rs.svg)](https://cirrus-ci.com/github/asomers/gstat-rs)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/asomers/gstat-rs/ci.yml?branch=master&style=flat-square)](https://github.com/asomers/gstat-rs/actions/workflows/ci.yml?query=branch%3Amaster)
 [![Crates.io](https://img.shields.io/crates/v/freebsd-geom-exporter.svg)](https://crates.io/crates/freebsd-geom-exporter)
 [![FreeBSD port](https://repology.org/badge/version-for-repo/freebsd/geom-exporter.svg)](https://repology.org/project/geom-exporter/versions)
 
