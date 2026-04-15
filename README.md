@@ -1,6 +1,6 @@
 # Rust utilities involving FreeBSD libgeom
 
-[![Build Status](https://api.cirrus-ci.com/github/asomers/gstat-rs.svg)](https://cirrus-ci.com/github/asomers/gstat-rs)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/asomers/gstat-rs/ci.yml?branch=master&style=flat-square)](https://github.com/asomers/gstat-rs/actions/workflows/ci.yml?query=branch%3Amaster)
 
 ## Overview
 
