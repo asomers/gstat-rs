@@ -19,7 +19,7 @@ jobs:
             rust_version: "1.89.0"
           - freebsd_version: "14.4"
             rust_version: "1.89.0"
-          - freebsd_version: "15.0"
+          - freebsd_version: "15.1"
             rust_version: "1.89.0"
           - freebsd_version: "14.4"
             rust_version: "nightly"
