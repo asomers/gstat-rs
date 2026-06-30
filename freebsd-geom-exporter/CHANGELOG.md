@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [Unreleased] - ReleaseDate
+
+### Changed
+
+- `bindgen` is no longer required at build time.
+  (#[70](https://github.com/asomers/gstat-rs/pull/70))
+
 ## [0.1.3] - 2026-02-18
 
 ### Fixed
