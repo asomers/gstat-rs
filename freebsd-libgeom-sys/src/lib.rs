@@ -12,7 +12,17 @@
 #![allow(non_snake_case)]
 
 #[cfg(not(crossdocs))]
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#[cfg(target_pointer_width = "32")]
+mod ffi32;
+#[cfg(not(crossdocs))]
+#[cfg(target_pointer_width = "64")]
+mod ffi64;
+#[cfg(not(crossdocs))]
+#[cfg(target_pointer_width = "32")]
+pub use ffi32::*;
+#[cfg(not(crossdocs))]
+#[cfg(target_pointer_width = "64")]
+pub use ffi64::*;
 
 #[cfg(crossdocs)]
 mod fakes;

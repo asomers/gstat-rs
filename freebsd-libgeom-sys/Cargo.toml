@@ -19,5 +19,5 @@ pre-release-replacements = []
 
 [dependencies]
 
-[build-dependencies]
-bindgen = { version = "0.72", features=[] }
+[dev-dependencies]
+tempfile = "3.27"
