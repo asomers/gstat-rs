@@ -15,13 +15,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - freebsd_version: "13.5"
-            rust_version: "1.89.0"
-          - freebsd_version: "14.4"
+          - freebsd_version: "14.5"
             rust_version: "1.89.0"
           - freebsd_version: "15.1"
             rust_version: "1.89.0"
-          - freebsd_version: "14.4"
+          - freebsd_version: "14.5"
             rust_version: "nightly"
     name: FreeBSD ${{ matrix.freebsd_version }} ${{ matrix.rust_version }}
     steps:
